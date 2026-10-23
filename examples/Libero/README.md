@@ -128,3 +128,65 @@ python scripts/gr00t_finetune.py \
     --max-steps 60000
 ```
 > Note, replace with the corresponding data config class and training configs according to the [table](#training-config-table).
+
+## Leave-one-suite-out training on Slurm
+
+The cluster scripts train four independent models from the original GR00T-N1.5
+checkpoint. Each model holds out one of Spatial, Object, Goal, and Long, and
+trains on the other three. All runs use `LiberoDataConfig` (min-max action
+normalization), batch size 32, one H100 80GB, 8 CPUs, and 128GB RAM.
+
+Stage the already downloaded, filtered LeRobot datasets without changing their
+shared cache (Long maps to `libero_10_no_noops_1.0.0_lerobot`):
+
+```bash
+/home/vhoangth2/miniconda3/envs/gr00t/bin/python scripts/prepare_libero_loso.py \
+    --source-root /mnt/data/vhoangth2/hf_cache/lerobot/IPEC-COMMUNITY \
+    --destination-root demo_data/libero_loso
+/home/vhoangth2/miniconda3/envs/gr00t/bin/python scripts/validate_libero_videos.py
+PYTHONPATH=. /home/vhoangth2/miniconda3/envs/gr00t/bin/python scripts/prepare_libero_clean.py \
+    --validation-report outputs/video_debug/full_validation.json
+bash scripts/submit_libero_loso.sh
+```
+
+These local datasets contain 432 / 454 / 428 / 379 demonstrations for
+Spatial / Object / Goal / Long, respectively, rather than 500 per suite.
+The preparation script verifies all parquet/video paths and records the counts
+in `demo_data/libero_loso/manifest.json`.
+The video validation decodes all frames using one decoder thread per process.
+The cleaning step excludes each demonstration with a damaged video, renumbers
+retained episodes consistently across parquet and video paths, and recomputes
+state/action normalization from the retained frames. It writes a separate
+`demo_data/libero_loso_clean` dataset; the original cache is unchanged.
+The excluded episode IDs and counts are recorded in that directory's manifest.
+The Slurm scripts default to this cleaned dataset.
+The current cache has one damaged stream among 3,386 videos: original Goal
+episode 82, wrist camera, fails at frame 105 (5.25 seconds). Excluding that
+entire demonstration leaves Goal with 427 demonstrations and 51,913 frames.
+Use `goal/meta/episode_mapping.json` to map the cleaned IDs back to the originals.
+
+To restart only selected configurations in a new output directory, pass their
+held-out suites, for example `bash scripts/submit_libero_loso.sh spatial object long`.
+
+The submission script records four job IDs in
+`outputs/libero_loso/<timestamp>/submissions.tsv`. Logs go to
+`outputs/slurm/gr00t-loso-<held-out-suite>_<job-id>.{out,err}`.
+Metrics are logged to W&B online in project `gr00t-libero-loso`, grouped by
+the experiment timestamp, with one run per held-out suite and Slurm job ID.
+Existing W&B login credentials must be available on compute nodes. Override
+`WANDB_PROJECT` and `WANDB_ENTITY` before submission to choose a destination.
+Checkpoint uploads to W&B are disabled; weights stay on the cluster.
+Override `LOSO_RUN_ROOT`, `GR00T_PYTHON`, `LIBERO_DATA_ROOT`, or
+`GR00T_BASE_MODEL` in the environment if needed.
+
+Each job trains for **2 epochs**, with `max_steps=-1` and `save_strategy=epoch`,
+and retains **two standalone checkpoints** with optimizer/scheduler/RNG state.
+The extra final model export is disabled to avoid a third copy of the weights.
+Checkpoints live in `heldout_<suite>/checkpoint-<optimizer-step>`; the job
+verifies epochs 1 and 2 and writes their paths to `checkpoints.json`.
+Mixture epochs use the existing random sampling with replacement, with subset
+probabilities proportional to frame counts. Two epochs do not guarantee that
+each individual frame was sampled twice.
+
+The scripts submit training only. Evaluate each checkpoint on its held-out
+suite separately, using the same `LiberoDataConfig` and `new_embodiment` tag.

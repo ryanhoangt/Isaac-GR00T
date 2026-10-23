@@ -168,12 +168,13 @@ class TrainRunner:
         )
         return trainer
 
-    def train(self):
+    def train(self, save_final_model: bool = True):
         # Start training
         self.trainer.train(resume_from_checkpoint=self.resume_from_checkpoint)
         self.trainer.save_state()
 
-        safe_save_model_for_hf_trainer(
-            trainer=self.trainer,
-            output_dir=self.training_args.output_dir,
-        )
+        if save_final_model:
+            safe_save_model_for_hf_trainer(
+                trainer=self.trainer,
+                output_dir=self.training_args.output_dir,
+            )

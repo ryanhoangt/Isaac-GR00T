@@ -22,7 +22,7 @@ from typing import List, Literal
 
 import torch
 import tyro
-from transformers import TrainingArguments
+from transformers import TrainingArguments, set_seed
 
 from gr00t.data.dataset import LeRobotMixtureDataset, LeRobotSingleDataset
 from gr00t.data.schema import EmbodimentTag
@@ -58,13 +58,25 @@ class ArgsConfig:
     """Batch size per GPU for training."""
 
     max_steps: int = 10000
-    """Maximum number of training steps."""
+    """Maximum optimizer steps. Set to -1 to train for num_train_epochs instead."""
+
+    num_train_epochs: float = 300.0
+    """Number of epochs when max_steps is not positive."""
 
     num_gpus: int = 1
     """Number of GPUs to use for training."""
 
     save_steps: int = 1000
     """Number of steps between saving checkpoints."""
+
+    save_strategy: Literal["steps", "epoch"] = "steps"
+    """Save checkpoints every save_steps updates or at the end of each epoch."""
+
+    save_total_limit: int = 5
+    """Maximum number of checkpoints to retain."""
+
+    save_final_model: bool = True
+    """Also export model weights to output_dir after training."""
 
     # Model parameters
     base_model_path: str = "nvidia/GR00T-N1.5-3B"
@@ -193,6 +205,8 @@ def _copy_partial_action_expert_weights(old_dict, new_dict, old_dim, new_dim):
 
 def main(config: ArgsConfig):
     """Main training function."""
+    # Seed newly initialized embodiment weights as well as the training loop.
+    set_seed(42)
     # ------------ step 1: load dataset ------------
     embodiment_tag = EmbodimentTag(config.embodiment_tag)
 
@@ -366,12 +380,12 @@ def main(config: ArgsConfig):
         warmup_ratio=config.warmup_ratio,
         lr_scheduler_type="cosine",
         logging_steps=10.0,
-        num_train_epochs=300,
+        num_train_epochs=config.num_train_epochs,
         max_steps=config.max_steps,
-        save_strategy="steps",
+        save_strategy=config.save_strategy,
         save_steps=config.save_steps,
         # evaluation_strategy="no",
-        save_total_limit=5,
+        save_total_limit=config.save_total_limit,
         report_to=config.report_to,
         seed=42,
         do_eval=False,
@@ -389,7 +403,7 @@ def main(config: ArgsConfig):
     )
 
     # 2.3 run experiment
-    experiment.train()
+    experiment.train(save_final_model=config.save_final_model)
 
 
 if __name__ == "__main__":
@@ -414,8 +428,8 @@ if __name__ == "__main__":
     print(f"Using {config.num_gpus} GPUs")
 
     if config.num_gpus == 1:
-        # Single GPU mode - set CUDA_VISIBLE_DEVICES=0
-        os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+        # Preserve Slurm's GPU assignment when running on a single allocated GPU.
+        os.environ.setdefault("CUDA_VISIBLE_DEVICES", "0")
         # Run the script normally
         main(config)
     else:

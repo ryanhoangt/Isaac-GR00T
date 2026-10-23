@@ -122,3 +122,6 @@ playground/
 demo_data/gr00t-gr1-apple-to-shelf/
 tmp/
 output/
+outputs/
+demo_data/libero_loso/
+demo_data/libero_loso_clean/
