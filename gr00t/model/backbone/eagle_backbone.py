@@ -69,6 +69,7 @@ class EagleBackbone(nn.Module):
             p.requires_grad = True
         if not tune_llm:
             self.eagle_model.language_model.requires_grad_(False)
+            self.eagle_linear.requires_grad_(False)
         if not tune_visual:
             self.eagle_model.vision_model.requires_grad_(False)
             self.eagle_model.mlp1.requires_grad_(False)

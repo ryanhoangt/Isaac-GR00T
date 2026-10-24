@@ -46,14 +46,14 @@ def get_libero_image(obs):
     return img, wrist_img
 
 
-def save_rollout_video(top_view, wrist_view, idx, success, task_description, log_file=None):
+def save_rollout_video(top_view, wrist_view, idx, success, task_description, log_file, log_dir):
     """Saves an MP4 replay of an episode."""
-    rollout_dir = f"./rollouts/{DATE}"
-    os.makedirs(rollout_dir, exist_ok=True)
+    # rollout_dir = f"./runs/rollouts/{DATE}"
+    # os.makedirs(rollout_dir, exist_ok=True)
     processed_task_description = (
-        task_description.lower().replace(" ", "_").replace("\n", "_").replace(".", "_")[:50]
+        task_description.lower().replace(" ", "_").replace("\n", "_").replace(".", "_")[:128]
     )
-    mp4_path = f"{rollout_dir}/{DATE_TIME}--episode={idx}--success={success}--task={processed_task_description}.mp4"
+    mp4_path = f"{log_dir}/episode={idx}--success={success}--task={processed_task_description}.mp4"
     video_writer = imageio.get_writer(mp4_path, fps=30)
     for img1, img2 in zip(top_view, wrist_view):
         combined = np.hstack((img1, img2))

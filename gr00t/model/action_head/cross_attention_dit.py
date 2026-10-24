@@ -263,8 +263,8 @@ class DiT(ModelMixin, ConfigMixin):
         self,
         hidden_states: torch.Tensor,  # Shape: (B, T, D)
         encoder_hidden_states: torch.Tensor,  # Shape: (B, S, D)
-        timestep: Optional[torch.LongTensor] = None,
         encoder_attention_mask: Optional[torch.Tensor] = None,
+        timestep: Optional[torch.LongTensor] = None,
         return_all_hidden_states: bool = False,
     ):
         # Encode timesteps

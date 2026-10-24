@@ -13,6 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 import io
 import json
 from dataclasses import dataclass
@@ -22,7 +24,16 @@ import msgpack
 import numpy as np
 import zmq
 
-from gr00t.data.dataset import ModalityConfig
+from pydantic import BaseModel
+
+
+class ModalityConfig(BaseModel):
+    """Configuration for a modality."""
+
+    delta_indices: list[int]
+    """Delta indices to sample relative to the current index. The returned data will correspond to the original data at a sampled base index + delta indices."""
+    modality_keys: list[str]
+    """The keys to load for the modality in the dataset."""
 
 
 class MsgSerializer:

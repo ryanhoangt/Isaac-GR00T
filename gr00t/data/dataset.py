@@ -33,6 +33,7 @@ from typing import Sequence
 import numpy as np
 import pandas as pd
 from pydantic import BaseModel, Field, ValidationError
+import torch
 from torch.utils.data import Dataset
 from tqdm import tqdm
 
@@ -148,7 +149,8 @@ class LeRobotSingleDataset(Dataset):
             self.tag = embodiment_tag
 
         self._metadata = self._get_metadata(EmbodimentTag(self.tag))
-        self._trajectory_ids, self._trajectory_lengths = self._get_trajectories()
+        self._trajectory_ids, self._trajectory_lengths, self._trajectory_tasks = self._get_trajectories()
+        self._task_groups = self._get_task_groups()
         self._all_steps = self._get_all_steps()
         self._modality_keys = self._get_modality_keys()
         self._delta_indices = self._get_delta_indices()
@@ -205,6 +207,19 @@ class LeRobotSingleDataset(Dataset):
         The order of the lengths is the same as the order of the trajectory IDs.
         """
         return self._trajectory_lengths
+
+    @property
+    def trajectory_tasks(self) -> list[str]:
+        """The trajectory tasks in the dataset, stored as a list of strings.
+        The order of the tasks is the same as the order of the trajectory IDs.
+        """
+        return self._trajectory_tasks
+
+    @property
+    def task_groups(self) -> dict[str, list[int]]:
+        """The task gropus in the dataset, stored as a dictionary.
+        """
+        return self._task_groups
 
     @property
     def all_steps(self) -> list[tuple[int, int]]:
@@ -396,7 +411,7 @@ class LeRobotSingleDataset(Dataset):
 
         return metadata
 
-    def _get_trajectories(self) -> tuple[np.ndarray, np.ndarray]:
+    def _get_trajectories(self) -> tuple[np.ndarray, np.ndarray, list[str]]:
         """Get the trajectories in the dataset."""
         # Get trajectory lengths, IDs, and whitelist from dataset metadata
         episode_path = self.dataset_path / LE_ROBOT_EPISODE_FILENAME
@@ -404,10 +419,19 @@ class LeRobotSingleDataset(Dataset):
             episode_metadata = [json.loads(line) for line in f]
         trajectory_ids = []
         trajectory_lengths = []
+        trajectory_tasks = []
         for episode in episode_metadata:
             trajectory_ids.append(episode["episode_index"])
             trajectory_lengths.append(episode["length"])
-        return np.array(trajectory_ids), np.array(trajectory_lengths)
+            trajectory_tasks.append(episode["tasks"][0])
+        return np.array(trajectory_ids), np.array(trajectory_lengths), trajectory_tasks
+
+    def _get_task_groups(self) -> dict[str, list[int]]:
+        """Get the task groups in the dataset."""
+        task_groups = defaultdict(list)
+        for trajectory_id, trajectory_task in zip(self.trajectory_ids, self.trajectory_tasks):
+            task_groups[trajectory_task].append(trajectory_id.item())
+        return task_groups
 
     def _get_all_steps(self) -> list[tuple[int, int]]:
         """Get the trajectory IDs and base indices for all steps in the dataset.
@@ -882,29 +906,35 @@ class CachedLeRobotSingleDataset(LeRobotSingleDataset):
         super().__init__(*args, **kwargs)
         cached_frames: dict[str, np.ndarray] = {}
 
-        for key in self.modality_keys["video"]:
-            all_frames = []
-            key = key.replace("video.", "")
-            for trajectory_id, trajectory_length in tqdm(
-                zip(self.trajectory_ids, self.trajectory_lengths),
-                total=len(self.trajectory_ids),
-                desc=f"Caching {key} frames",
-            ):
-                video_path = self.get_video_path(trajectory_id, key)
-                frames = get_all_frames(
-                    video_path.as_posix(),
-                    video_backend=self.video_backend,
-                    video_backend_kwargs=self.video_backend_kwargs,
-                    resize_size=img_resize,
-                )
-                assert frames.ndim == 4, f"Expected 4D array, got {frames.shape} array"
-                assert frames.shape[3] == 3, f"Expected 3 channels, got {frames.shape[3]} channels"
-                # assert (
-                #     frames.shape[0] == trajectory_length
-                # ), f"Expected {trajectory_length} frames, got {frames.shape[0]} frames"
-                all_frames.append(frames)
-            cached_frames[key] = np.concatenate(all_frames, axis=0)
-            print(f"{key}: {cached_frames[key].shape}")
+        cached_frames_path = self.dataset_path / ".cache/frames.pt"
+        if cached_frames_path.exists():
+            cached_frames = torch.load(cached_frames_path)
+            print("> Loaded cached frames.")
+        else:
+            for key in self.modality_keys["video"]:
+                all_frames = []
+                key = key.replace("video.", "")
+                for trajectory_id, trajectory_length in tqdm(
+                    zip(self.trajectory_ids, self.trajectory_lengths),
+                    total=len(self.trajectory_ids),
+                    desc=f"Caching {key} frames",
+                ):
+                    video_path = self.get_video_path(trajectory_id, key)
+                    frames = get_all_frames(
+                        video_path.as_posix(),
+                        video_backend=self.video_backend,
+                        video_backend_kwargs=self.video_backend_kwargs,
+                        resize_size=img_resize,
+                    )
+                    assert frames.ndim == 4, f"Expected 4D array, got {frames.shape} array"
+                    assert frames.shape[3] == 3, f"Expected 3 channels, got {frames.shape[3]} channels"
+                    # assert (
+                    #     frames.shape[0] == trajectory_length
+                    # ), f"Expected {trajectory_length} frames, got {frames.shape[0]} frames"
+                    all_frames.append(frames)
+                cached_frames[key] = np.concatenate(all_frames, axis=0)
+                print(f"{key}: {cached_frames[key].shape}")
+            torch.save(cached_frames, cached_frames_path, pickle_protocol=4)
         self.cached_frames = cached_frames
         self.start_indices = np.cumsum(self.trajectory_lengths) - self.trajectory_lengths
 
@@ -1308,5 +1338,14 @@ class LeRobotMixtureDataset(Dataset):
                 dataset_sampling_weights=self.dataset_sampling_weights.tolist(),
                 percentile_mixing_method=metadata_config["percentile_mixing_method"],
             )
+        for dataset in self.datasets:
+            dataset.set_transforms_metadata(self.merged_metadata[dataset.tag])
+
+    def save_metadata(self, metadata_dir: str) -> None:
+        Path(metadata_dir).mkdir(parents=True, exist_ok=True)
+        torch.save(self.merged_metadata, f"{metadata_dir}/metadata.pt")
+
+    def load_metadata(self, metadata_dir: str) -> None:
+        self.merged_metadata = torch.load(f"{metadata_dir}/metadata.pt")
         for dataset in self.datasets:
             dataset.set_transforms_metadata(self.merged_metadata[dataset.tag])

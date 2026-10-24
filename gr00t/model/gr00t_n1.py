@@ -198,7 +198,7 @@ class GR00T_N1_5(PreTrainedModel):
 
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path: str, **kwargs):
-        tune_visual = kwargs.pop("tune_visual", True)
+        tune_visual = kwargs.pop("tune_visual", False)
         tune_llm = kwargs.pop("tune_llm", False)
         tune_projector = kwargs.pop("tune_projector", True)
         tune_diffusion_model = kwargs.pop("tune_diffusion_model", True)
@@ -231,6 +231,11 @@ class GR00T_N1_5(PreTrainedModel):
         pretrained_model.action_head.set_trainable_parameters(
             tune_projector=tune_projector, tune_diffusion_model=tune_diffusion_model
         )
+
+        from torch.distributions import Beta
+        pretrained_model.action_head.beta_dist = (
+            Beta(pretrained_model.action_head.config.noise_beta_alpha,
+                 pretrained_model.action_head.config.noise_beta_beta))
         return pretrained_model
 
 

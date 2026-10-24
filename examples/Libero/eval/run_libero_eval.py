@@ -1,3 +1,6 @@
+from __future__ import annotations
+from collections import deque
+
 import os
 import pprint
 from dataclasses import dataclass
@@ -9,7 +12,7 @@ import tqdm
 import tyro
 from libero.libero import benchmark
 
-from examples.Libero.eval.utils import (
+from eval_scripts.gr00t.utils import (
     get_libero_dummy_action,
     get_libero_env,
     get_libero_image,
@@ -17,9 +20,6 @@ from examples.Libero.eval.utils import (
     quat2axisangle,
     save_rollout_video,
 )
-
-log_dir = "/tmp/logs"
-os.makedirs(log_dir, exist_ok=True)  # ensures directory exists
 
 
 def summarize_obs(obs_dict):
@@ -57,13 +57,14 @@ class GenerateConfig:
     #################################################################################################################
     task_suite_name: str = "libero_spatial"          # Task suite. Options: libero_spatial, libero_object, libero_goal, libero_10, libero_90
     num_steps_wait: int = 10                         # Number of steps to wait for objects to stabilize in sim
-    num_trials_per_task: int = 5                    # Number of rollouts per task
+    num_trials_per_task: int = 50                    # Number of rollouts per task
     #################################################################################################################
     # fmt: on
     """Port to connect to."""
-    port: int = 5555
+    port: int = 8071
     """Headless mode (no GUI)."""
-    headless: bool = False
+    headless: bool = True
+    run_name: str = "default"
 
 
 class GR00TPolicy:
@@ -83,19 +84,26 @@ class GR00TPolicy:
     }
 
     def __init__(self, host="localhost", port=5555, headless=False):
-        from gr00t.eval.service import ExternalRobotInferenceClient
+        from eval_scripts.gr00t.service import ExternalRobotInferenceClient
 
         self.policy = ExternalRobotInferenceClient(host=host, port=port)
         self.config = self.LIBERO_CONFIG
         self.action_keys = ["x", "y", "z", "roll", "pitch", "yaw", "gripper"]
         self.headless = headless
+        self.actions = deque()
+
+    def reset(self):
+        self.actions.clear()
 
     def get_action(self, observation_dict, lang: str):
         """Get action from GR00T policy given observation and language instruction."""
-        obs_dict = self._process_observation(observation_dict, lang)
-        # summarize_obs(obs_dict)
-        action_chunk = self.policy.get_action(obs_dict)
-        return self._convert_to_libero_action(action_chunk, 0)
+        if len(self.actions) == 0:
+            obs_dict = self._process_observation(observation_dict, lang)
+            # summarize_obs(obs_dict)
+            action_chunk = self.policy.get_action(obs_dict)
+            actions = self._convert_to_libero_action(action_chunk)
+            self.actions.extend(actions)
+        return self.actions.popleft()
 
     def _process_observation(self, obs, lang: str):
         """Convert Libero observation to GR00T format."""
@@ -131,22 +139,26 @@ class GR00TPolicy:
         Returns:
             7-dim numpy array: [dx, dy, dz, droll, dpitch, dyaw, gripper]
         """
-        action_components = [
-            np.atleast_1d(action_chunk[f"action.{key}"][idx])[0] for key in self.action_keys
-        ]
-        action_array = np.array(action_components, dtype=np.float32)
+        # action_components = [
+        #     np.atleast_1d(action_chunk[f"action.{key}"][idx])[0] for key in self.action_keys
+        # ]
+        # action_array = np.array(action_components, dtype=np.float32)
+        action_array = np.concatenate([action_chunk[f"action.{key}"] for key in self.action_keys], axis=1)
         action_array = normalize_gripper_action(action_array, binarize=True)
-        assert len(action_array) == 7, f"Expected 7-dim action, got {len(action_array)}"
+        assert action_array.shape[-1] == 7, f"Expected 7-dim action, got {action_array.shape[-1]}"
         return action_array
 
 
 def eval_libero(cfg: GenerateConfig) -> None:
+    log_dir = f"./runs/gr00t/{cfg.task_suite_name}/{cfg.run_name}"
+    os.makedirs(log_dir, exist_ok=True)  # ensures directory exists
+
     # Initialize LIBERO task suite
     benchmark_dict = benchmark.get_benchmark_dict()
     task_suite = benchmark_dict[cfg.task_suite_name]()
     num_tasks_in_suite = task_suite.n_tasks
     print(f"Task suite: {cfg.task_suite_name}")
-    log_file = open(f"{log_dir}/libero_eval_{cfg.task_suite_name}.log", "w")
+    log_file = open(f"{log_dir}/results.log", "w")
     log_file.write(f"Task suite: {cfg.task_suite_name}\n")
 
     # Start evaluation
@@ -171,6 +183,7 @@ def eval_libero(cfg: GenerateConfig) -> None:
 
             # Reset environment
             env.reset()
+            gr00t_policy.reset()
 
             # Set initial states
             obs = env.set_init_state(initial_states[episode_idx])
@@ -238,6 +251,7 @@ def eval_libero(cfg: GenerateConfig) -> None:
                 success=done,
                 task_description=task_description,
                 log_file=log_file,
+                log_dir=log_dir,
             )
 
             # Log current results
