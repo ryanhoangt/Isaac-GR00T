@@ -6,15 +6,16 @@ import time
 
 import imageio
 import numpy as np
-from libero.libero import get_libero_path
-from libero.libero.envs import OffScreenRenderEnv
 
 DATE = time.strftime("%Y_%m_%d")
 DATE_TIME = time.strftime("%Y_%m_%d-%H_%M_%S")
 
 
-def get_libero_env(task, resolution=256):
+def get_libero_env(task, resolution=256, horizon=1000):
     """Initializes and returns the LIBERO environment, along with the task description."""
+    from libero.libero import get_libero_path
+    from libero.libero.envs import OffScreenRenderEnv
+
     task_description = task.language
     task_bddl_file = os.path.join(
         get_libero_path("bddl_files"), task.problem_folder, task.bddl_file
@@ -23,6 +24,7 @@ def get_libero_env(task, resolution=256):
         "bddl_file_name": task_bddl_file,
         "camera_heights": resolution,
         "camera_widths": resolution,
+        "horizon": horizon,
     }
     env = OffScreenRenderEnv(**env_args)
     env.seed(
@@ -46,9 +48,9 @@ def get_libero_image(obs):
     return img, wrist_img
 
 
-def save_rollout_video(top_view, wrist_view, idx, success, task_description, log_file=None):
+def save_rollout_video(top_view, wrist_view, idx, success, task_description, log_file=None, output_dir=None):
     """Saves an MP4 replay of an episode."""
-    rollout_dir = f"./rollouts/{DATE}"
+    rollout_dir = os.fspath(output_dir) if output_dir is not None else f"./rollouts/{DATE}"
     os.makedirs(rollout_dir, exist_ok=True)
     processed_task_description = (
         task_description.lower().replace(" ", "_").replace("\n", "_").replace(".", "_")[:50]

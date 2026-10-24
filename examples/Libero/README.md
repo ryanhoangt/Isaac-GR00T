@@ -2,6 +2,68 @@
 
 This directory contains fine-tuning and evaluation scripts for **GR00T N1.5** on the Libero benchmark suite.
 
+## Managed checkpoint rollout evaluation
+
+From the repository root, inside a GPU allocation, evaluate a checkpoint or a
+whole training-run directory with:
+
+```bash
+# Both saved epochs of the existing held-out Goal run, 5 trials/task (50 episodes/checkpoint).
+bash scripts/eval_libero_rollout.sh \
+    outputs/libero_loso/20261023T163134Z/heldout_goal --trials 5
+
+# Only the newest complete checkpoint of a run.
+bash scripts/eval_libero_rollout.sh /path/to/heldout_spatial --latest --trials 50
+
+# An individual future checkpoint without our training manifest needs an explicit suite.
+bash scripts/eval_libero_rollout.sh /path/to/checkpoint-20000 --suite long --trials 50
+
+# Discover checkpoints from both current experiment directories. Rerun this command
+# later to pick up new complete checkpoints; completed identical evaluations are skipped.
+bash scripts/eval_libero_rollout.sh \
+    outputs/libero_loso/20261023T163134Z/heldout_goal \
+    outputs/libero_loso/20261023T175731Z --trials 5
+```
+
+The script starts one inference server per checkpoint, waits for a successful
+ZMQ ping, runs all tasks of the selected suite headlessly, then shuts down its
+server. Checkpoints are evaluated sequentially on one GPU; it preserves Slurm's
+`CUDA_VISIBLE_DEVICES`. Ctrl-C and SIGTERM stop the child processes too.
+It runs only when invoked; it does not submit Slurm jobs or watch for new files.
+
+The held-out suite and training data config are inferred from `run_manifest.json`.
+`long` maps to `libero_10`. These LOSO runs all use `LiberoDataConfig`, including
+held-out Goal; evaluation does not automatically switch Goal to mean/std.
+Defaults are 8 denoising steps, seed 0, and the first 5 official initial states
+per task. `--trials 50` uses the first 50 states per task (500 episodes for a
+10-task suite). The evaluator preserves the repository's first-action-per-query
+behavior and suite step limits. Keep these options fixed when comparing checkpoints.
+The simulator horizon includes stabilization steps: for Long, 1,000 policy
+actions plus 10 no-op steps gives a horizon of 1,010. A rollout that exhausts
+this budget without reaching the goal is counted as unsuccessful and saved
+normally. This avoids stepping an internally terminated robosuite episode,
+whose termination flag LIBERO replaces with task success in its public API.
+
+Each checkpoint/settings combination has separate timestamped attempts under
+`outputs/libero_eval/`, containing `server.log`, `eval.log`, `eval_manifest.json`,
+`summary.json`, and rollout MP4s under `videos/`. The summary records per-task and
+overall success rates. Runtime errors produce a failed summary and a nonzero
+exit code. Metrics remain local; this helper does not upload rollout results to W&B.
+
+Useful options: `--dry-run` prints the plan without loading a model/simulator;
+`--no-videos` disables MP4s; `--rerun` repeats a completed evaluation;
+`--output-root`, `--suite`, and `--data-config` override their defaults.
+Incomplete training checkpoints are ignored during directory discovery.
+
+The shell launcher defaults to the existing `gr00t` Python environment.
+Set `GR00T_PYTHON` to use a different compatible Python (3.10+), and
+`LIBERO_REPO` to the LIBERO checkout (default: the sibling `../LIBERO`).
+It adds this checkout to `PYTHONPATH`; no package installation is performed.
+When that checkout exists, a local LIBERO asset config is created inside each
+evaluation output directory, without changing `~/.libero`. An explicit
+`LIBERO_CONFIG_PATH` is respected. `LIBERO_EVAL_PYTHON` or `--eval-python` can
+select a separate environment with the required evaluator/client dependencies.
+
 
 
 ## 🎯 Model Evaluation

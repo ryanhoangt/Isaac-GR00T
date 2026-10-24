@@ -1,13 +1,14 @@
-import os
+import json
 import pprint
-from dataclasses import dataclass
+import random
+from dataclasses import asdict, dataclass
+from pathlib import Path
 
 import cv2
 import numpy as np
 import torch
 import tqdm
 import tyro
-from libero.libero import benchmark
 
 from examples.Libero.eval.utils import (
     get_libero_dummy_action,
@@ -17,10 +18,6 @@ from examples.Libero.eval.utils import (
     quat2axisangle,
     save_rollout_video,
 )
-
-log_dir = "/tmp/logs"
-os.makedirs(log_dir, exist_ok=True)  # ensures directory exists
-
 
 def summarize_obs(obs_dict):
     summary = {}
@@ -51,19 +48,24 @@ def show_obs_images_cv2(new_obs):
 
 @dataclass
 class GenerateConfig:
-    # fmt: off
-    #################################################################################################################
-    # LIBERO environment-specific parameters
-    #################################################################################################################
-    task_suite_name: str = "libero_spatial"          # Task suite. Options: libero_spatial, libero_object, libero_goal, libero_10, libero_90
-    num_steps_wait: int = 10                         # Number of steps to wait for objects to stabilize in sim
-    num_trials_per_task: int = 5                    # Number of rollouts per task
-    #################################################################################################################
-    # fmt: on
-    """Port to connect to."""
+    task_suite_name: str = "libero_spatial"
+    """LIBERO suite: libero_spatial, libero_object, libero_goal, libero_10, or libero_90."""
+    num_steps_wait: int = 10
+    """No-op steps for objects to stabilize before querying the policy."""
+    num_trials_per_task: int = 5
+    """Number of official initial states to evaluate per task."""
     port: int = 5555
-    """Headless mode (no GUI)."""
+    """Local inference server port."""
     headless: bool = False
+    """Disable GUI observation previews."""
+    output_dir: str = "./outputs/libero_eval"
+    """Directory for logs, summary.json, and rollout videos."""
+    seed: int = 0
+    """Random seed for the simulator and evaluator."""
+    save_videos: bool = True
+    """Save camera replays as MP4 files."""
+    request_timeout_ms: int = 60000
+    """Maximum time to wait for an inference response."""
 
 
 class GR00TPolicy:
@@ -82,10 +84,10 @@ class GR00TPolicy:
         },
     }
 
-    def __init__(self, host="localhost", port=5555, headless=False):
+    def __init__(self, host="localhost", port=5555, headless=False, timeout_ms=60000):
         from gr00t.eval.service import ExternalRobotInferenceClient
 
-        self.policy = ExternalRobotInferenceClient(host=host, port=port)
+        self.policy = ExternalRobotInferenceClient(host=host, port=port, timeout_ms=timeout_ms)
         self.config = self.LIBERO_CONFIG
         self.action_keys = ["x", "y", "z", "roll", "pitch", "yaw", "gripper"]
         self.headless = headless
@@ -141,129 +143,104 @@ class GR00TPolicy:
 
 
 def eval_libero(cfg: GenerateConfig) -> None:
-    # Initialize LIBERO task suite
-    benchmark_dict = benchmark.get_benchmark_dict()
-    task_suite = benchmark_dict[cfg.task_suite_name]()
-    num_tasks_in_suite = task_suite.n_tasks
-    print(f"Task suite: {cfg.task_suite_name}")
-    log_file = open(f"{log_dir}/libero_eval_{cfg.task_suite_name}.log", "w")
-    log_file.write(f"Task suite: {cfg.task_suite_name}\n")
+    from libero.libero import benchmark
 
-    # Start evaluation
-    total_episodes, total_successes = 0, 0
-    for task_id in tqdm.tqdm(range(num_tasks_in_suite)):
-        # Get task
-        task = task_suite.get_task(task_id)
+    limits = {"libero_spatial": 220, "libero_object": 280, "libero_goal": 600,
+              "libero_10": 1000, "libero_90": 400}
+    if cfg.task_suite_name not in limits:
+        raise ValueError(f"Unsupported suite: {cfg.task_suite_name}")
+    if cfg.num_trials_per_task < 1 or cfg.num_steps_wait < 0 or cfg.request_timeout_ms < 1:
+        raise ValueError("Trials/timeout must be positive; wait steps must be nonnegative")
+    random.seed(cfg.seed)
+    np.random.seed(cfg.seed)
+    torch.manual_seed(cfg.seed)
+    output = Path(cfg.output_dir)
+    output.mkdir(parents=True, exist_ok=True)
+    summary_path = output / "summary.json"
+    if summary_path.exists():
+        raise FileExistsError(f"Refusing to overwrite {summary_path}")
+    suite = benchmark.get_benchmark_dict()[cfg.task_suite_name]()
+    # Stabilization steps count toward robosuite's internal termination horizon.
+    # LIBERO replaces returned `done` with task success, hiding horizon termination.
+    simulator_horizon = limits[cfg.task_suite_name] + cfg.num_steps_wait
+    summary = {"status": "running", "config": asdict(cfg), "tasks": [],
+               "max_action_steps": limits[cfg.task_suite_name], "simulator_horizon": simulator_horizon,
+               "total_episodes": 0, "total_successes": 0, "success_rate": 0.0}
 
-        # Get default LIBERO initial states
-        initial_states = task_suite.get_task_init_states(task_id)
+    def save_summary():
+        count = summary["total_episodes"]
+        summary["success_rate"] = summary["total_successes"] / count if count else 0.0
+        temporary = output / "summary.json.tmp"
+        temporary.write_text(json.dumps(summary, indent=2) + "\n")
+        temporary.replace(summary_path)
 
-        # Initialize LIBERO environment and task description
-        env, task_description = get_libero_env(task, resolution=256)
-
-        gr00t_policy = GR00TPolicy(host="localhost", port=cfg.port, headless=cfg.headless)
-
-        # Start episodes
-        task_episodes, task_successes = 0, 0
-        for episode_idx in tqdm.tqdm(range(cfg.num_trials_per_task)):
-            print(f"\nTask: {task_description}")
-            log_file.write(f"\nTask: {task_description}\n")
-
-            # Reset environment
-            env.reset()
-
-            # Set initial states
-            obs = env.set_init_state(initial_states[episode_idx])
-
-            # Setup
-            t = 0
-            top_view = []
-            wrist_view = []
-            if cfg.task_suite_name == "libero_spatial":
-                max_steps = 220  # longest training demo has 193 steps
-            elif cfg.task_suite_name == "libero_object":
-                max_steps = 280  # longest training demo has 254 steps
-            elif cfg.task_suite_name == "libero_goal":
-                max_steps = 600  # longest training demo has 270 steps
-            elif cfg.task_suite_name == "libero_10":
-                max_steps = 1000  # longest training demo has 505 steps
-            elif cfg.task_suite_name == "libero_90":
-                max_steps = 400  # longest training demo has 373 steps
-
-            print(f"Starting episode {task_episodes+1}...")
-            log_file.write(f"Starting episode {task_episodes+1}...\n")
-            while t < max_steps + cfg.num_steps_wait:
+    save_summary()
+    try:
+        with (output / f"libero_eval_{cfg.task_suite_name}.log").open("w") as log_file:
+            for task_id in tqdm.tqdm(range(suite.n_tasks)):
+                task = suite.get_task(task_id)
+                states = suite.get_task_init_states(task_id)
+                if cfg.num_trials_per_task > len(states):
+                    raise ValueError(f"Task {task_id} has only {len(states)} initial states")
+                env, description = get_libero_env(task, resolution=256, horizon=simulator_horizon)
+                policy = None
+                result = {"task_id": task_id, "description": description, "episodes": [],
+                          "successes": 0, "success_rate": 0.0}
+                summary["tasks"].append(result)
                 try:
-                    # IMPORTANT: Do nothing for the first few timesteps because the simulator drops objects
-                    # and we need to wait for them to fall
-                    if t < cfg.num_steps_wait:
-                        obs, reward, done, info = env.step(get_libero_dummy_action())
-                        t += 1
-                        continue
-
-                    # # Get preprocessed image
-                    img, wrist_img = get_libero_image(obs)
-
-                    # # Save preprocessed image for replay video
-                    top_view.append(img)
-                    wrist_view.append(wrist_img)
-
-                    # Query model to get action
-                    action = gr00t_policy.get_action(
-                        obs,
-                        task.language,
-                    )
-
-                    # Execute action in environment
-                    obs, reward, done, info = env.step(action.tolist())
-                    if done:
-                        task_successes += 1
-                        total_successes += 1
-                        break
-                    t += 1
-
-                except Exception as e:
-                    print(f"Caught exception: {e}")
-                    log_file.write(f"Caught exception: {e}\n")
-                    break
-
-            task_episodes += 1
-            total_episodes += 1
-
-            # Save a replay video of the episode
-            save_rollout_video(
-                top_view,
-                wrist_view,
-                total_episodes,
-                success=done,
-                task_description=task_description,
-                log_file=log_file,
-            )
-
-            # Log current results
-            print(f"Success: {done}")
-            print(f"# episodes completed so far: {total_episodes}")
-            print(f"# successes: {total_successes} ({total_successes / total_episodes * 100:.1f}%)")
-            log_file.write(f"Success: {done}\n")
-            log_file.write(f"# episodes completed so far: {total_episodes}\n")
-            log_file.write(
-                f"# successes: {total_successes} ({total_successes / total_episodes * 100:.1f}%)\n"
-            )
-            log_file.flush()
-
-        # Log final results
-        print(f"Current task success rate: {float(task_successes) / float(task_episodes)}")
-        print(f"Current total success rate: {float(total_successes) / float(total_episodes)}")
-        log_file.write(
-            f"Current task success rate: {float(task_successes) / float(task_episodes)}\n"
-        )
-        log_file.write(
-            f"Current total success rate: {float(total_successes) / float(total_episodes)}\n"
-        )
-        log_file.flush()
-
-    # Save local log file
-    log_file.close()
+                    env.seed(cfg.seed)
+                    policy = GR00TPolicy(port=cfg.port, headless=cfg.headless,
+                                         timeout_ms=cfg.request_timeout_ms)
+                    for episode_idx in tqdm.tqdm(range(cfg.num_trials_per_task)):
+                        env.reset()
+                        obs = env.set_init_state(states[episode_idx])
+                        success = False
+                        top_view, wrist_view = [], []
+                        action_steps = 0
+                        for t in range(limits[cfg.task_suite_name] + cfg.num_steps_wait):
+                            if t < cfg.num_steps_wait:
+                                obs, _, _, _ = env.step(get_libero_dummy_action())
+                                continue
+                            if cfg.save_videos:
+                                image, wrist = get_libero_image(obs)
+                                top_view.append(image)
+                                wrist_view.append(wrist)
+                            action = policy.get_action(obs, task.language)
+                            obs, _, done, _ = env.step(action.tolist())
+                            action_steps += 1
+                            if done:
+                                success = True
+                                break
+                        episode = {"initial_state_index": episode_idx, "success": success,
+                                   "action_steps": action_steps}
+                        if cfg.save_videos and top_view:
+                            episode["video"] = save_rollout_video(
+                                top_view, wrist_view, summary["total_episodes"] + 1,
+                                success, description, log_file=log_file, output_dir=output / "videos")
+                        result["episodes"].append(episode)
+                        result["successes"] += int(success)
+                        result["success_rate"] = result["successes"] / len(result["episodes"])
+                        summary["total_episodes"] += 1
+                        summary["total_successes"] += int(success)
+                        save_summary()
+                        message = (f"Task {task_id}, trial {episode_idx}: success={success}; "
+                                   f"total {summary['total_successes']}/{summary['total_episodes']}")
+                        print(message, flush=True)
+                        log_file.write(message + "\n")
+                        log_file.flush()
+                finally:
+                    if policy is not None:
+                        policy.policy.close()
+                    env.close()
+        summary["status"] = "completed"
+        save_summary()
+        print(f"Success rate: {summary['success_rate']:.2%} "
+              f"({summary['total_successes']}/{summary['total_episodes']})", flush=True)
+    except BaseException as exc:
+        summary["status"] = "failed"
+        summary["error"] = f"{type(exc).__name__}: {exc}"
+        save_summary()
+        raise
 
 
 if __name__ == "__main__":

@@ -100,6 +100,9 @@ class ArgsConfig:
     denoising_steps: int = 4
     """The number of denoising steps to use."""
 
+    seed: int = 0
+    """Random seed for reproducible inference sampling."""
+
     api_token: str = None
     """API token for authentication. If not provided, authentication is disabled."""
 
@@ -169,6 +172,9 @@ def _example_http_client_call(obs: dict, host: str, port: int, api_token: str):
 
 def main(args: ArgsConfig):
     if args.server:
+        from transformers import set_seed
+
+        set_seed(args.seed)
         # Create a policy
         # The `Gr00tPolicy` class is being used to create a policy object that encapsulates
         # the model path, transform name, embodiment tag, and denoising steps for the robot

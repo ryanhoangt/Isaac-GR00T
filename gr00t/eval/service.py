@@ -160,7 +160,12 @@ class BaseInferenceClient:
 
     def _init_socket(self):
         """Initialize or reinitialize the socket with current settings"""
+        if hasattr(self, "socket"):
+            self.socket.close(linger=0)
         self.socket = self.context.socket(zmq.REQ)
+        self.socket.setsockopt(zmq.RCVTIMEO, self.timeout_ms)
+        self.socket.setsockopt(zmq.SNDTIMEO, self.timeout_ms)
+        self.socket.setsockopt(zmq.LINGER, 0)
         self.socket.connect(f"tcp://{self.host}:{self.port}")
 
     def ping(self) -> bool:
@@ -202,10 +207,15 @@ class BaseInferenceClient:
             raise RuntimeError(f"Server error: {response['error']}")
         return response
 
+    def close(self):
+        """Release the connection without waiting for an unavailable server."""
+        if hasattr(self, "socket"):
+            self.socket.close(linger=0)
+        if hasattr(self, "context"):
+            self.context.term()
+
     def __del__(self):
-        """Cleanup resources on destruction"""
-        self.socket.close()
-        self.context.term()
+        self.close()
 
 
 class ExternalRobotInferenceClient(BaseInferenceClient):
