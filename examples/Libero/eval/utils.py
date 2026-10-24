@@ -23,6 +23,9 @@ def get_libero_env(task, resolution=256):
         "bddl_file_name": task_bddl_file,
         "camera_heights": resolution,
         "camera_widths": resolution,
+        # The evaluator owns the rollout budget, including warm-up steps.
+        # LIBERO returns task success as `done`, hiding robosuite's horizon flag.
+        "ignore_done": True,
     }
     env = OffScreenRenderEnv(**env_args)
     env.seed(

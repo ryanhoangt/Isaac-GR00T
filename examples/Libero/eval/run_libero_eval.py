@@ -2,8 +2,10 @@ from __future__ import annotations
 from collections import deque
 
 import os
+import json
 import pprint
 from dataclasses import dataclass
+from typing import List, Optional
 
 import cv2
 import numpy as np
@@ -12,7 +14,7 @@ import tqdm
 import tyro
 from libero.libero import benchmark
 
-from eval_scripts.gr00t.utils import (
+from examples.Libero.eval.utils import (
     get_libero_dummy_action,
     get_libero_env,
     get_libero_image,
@@ -65,6 +67,11 @@ class GenerateConfig:
     """Headless mode (no GUI)."""
     headless: bool = True
     run_name: str = "default"
+    output_dir: Optional[str] = None
+    """Override the directory containing rollout videos, results.log, and summary.json."""
+    host: str = "localhost"
+    task_ids: Optional[List[int]] = None
+    """Evaluate only these task IDs; by default evaluate the entire suite."""
 
 
 class GR00TPolicy:
@@ -84,7 +91,7 @@ class GR00TPolicy:
     }
 
     def __init__(self, host="localhost", port=5555, headless=False):
-        from eval_scripts.gr00t.service import ExternalRobotInferenceClient
+        from gr00t.eval.service import ExternalRobotInferenceClient
 
         self.policy = ExternalRobotInferenceClient(host=host, port=port)
         self.config = self.LIBERO_CONFIG
@@ -150,30 +157,40 @@ class GR00TPolicy:
 
 
 def eval_libero(cfg: GenerateConfig) -> None:
-    log_dir = f"./runs/gr00t/{cfg.task_suite_name}/{cfg.run_name}"
+    log_dir = cfg.output_dir or f"./runs/gr00t/{cfg.task_suite_name}/{cfg.run_name}"
     os.makedirs(log_dir, exist_ok=True)  # ensures directory exists
 
     # Initialize LIBERO task suite
     benchmark_dict = benchmark.get_benchmark_dict()
     task_suite = benchmark_dict[cfg.task_suite_name]()
     num_tasks_in_suite = task_suite.n_tasks
+    task_ids = list(range(num_tasks_in_suite)) if cfg.task_ids is None else cfg.task_ids
+    if not task_ids or len(set(task_ids)) != len(task_ids):
+        raise ValueError("task_ids must be nonempty and contain no duplicates")
+    if any(task_id < 0 or task_id >= num_tasks_in_suite for task_id in task_ids):
+        raise ValueError(f"task_ids must be between 0 and {num_tasks_in_suite - 1}")
+    if cfg.num_trials_per_task < 1:
+        raise ValueError("num_trials_per_task must be positive")
     print(f"Task suite: {cfg.task_suite_name}")
     log_file = open(f"{log_dir}/results.log", "w")
     log_file.write(f"Task suite: {cfg.task_suite_name}\n")
 
     # Start evaluation
     total_episodes, total_successes = 0, 0
-    for task_id in tqdm.tqdm(range(num_tasks_in_suite)):
+    episode_results = []
+    for task_id in tqdm.tqdm(task_ids):
         # Get task
         task = task_suite.get_task(task_id)
 
         # Get default LIBERO initial states
         initial_states = task_suite.get_task_init_states(task_id)
+        if cfg.num_trials_per_task > len(initial_states):
+            raise ValueError("Requested more trials than available LIBERO initial states")
 
         # Initialize LIBERO environment and task description
         env, task_description = get_libero_env(task, resolution=256)
 
-        gr00t_policy = GR00TPolicy(host="localhost", port=cfg.port, headless=cfg.headless)
+        gr00t_policy = GR00TPolicy(host=cfg.host, port=cfg.port, headless=cfg.headless)
 
         # Start episodes
         task_episodes, task_successes = 0, 0
@@ -190,6 +207,7 @@ def eval_libero(cfg: GenerateConfig) -> None:
 
             # Setup
             t = 0
+            done = False
             top_view = []
             wrist_view = []
             if cfg.task_suite_name == "libero_spatial":
@@ -238,10 +256,18 @@ def eval_libero(cfg: GenerateConfig) -> None:
                 except Exception as e:
                     print(f"Caught exception: {e}")
                     log_file.write(f"Caught exception: {e}\n")
-                    break
+                    log_file.flush()
+                    raise
 
             task_episodes += 1
             total_episodes += 1
+            episode_results.append({
+                "task_id": task_id,
+                "task_description": task_description,
+                "episode_index": episode_idx,
+                "success": bool(done),
+                "control_steps": t - cfg.num_steps_wait + int(bool(done)),
+            })
 
             # Save a replay video of the episode
             save_rollout_video(
@@ -275,6 +301,19 @@ def eval_libero(cfg: GenerateConfig) -> None:
             f"Current total success rate: {float(total_successes) / float(total_episodes)}\n"
         )
         log_file.flush()
+        env.close()
+
+        with open(f"{log_dir}/summary.json", "w") as summary_file:
+            json.dump({
+                "task_suite_name": cfg.task_suite_name,
+                "run_name": cfg.run_name,
+                "task_ids": task_ids,
+                "num_trials_per_task": cfg.num_trials_per_task,
+                "num_episodes": total_episodes,
+                "num_successes": total_successes,
+                "success_rate": total_successes / total_episodes,
+                "episodes": episode_results,
+            }, summary_file, indent=2)
 
     # Save local log file
     log_file.close()

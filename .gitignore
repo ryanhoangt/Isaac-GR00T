@@ -122,3 +122,7 @@ playground/
 demo_data/gr00t-gr1-apple-to-shelf/
 tmp/
 output/
+
+# RA-VLA evaluation artifacts
+outputs/ravla_eval/
+runs/gr00t/

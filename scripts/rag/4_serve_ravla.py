@@ -1,4 +1,6 @@
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Optional
 import tyro
 import torch
 
@@ -21,6 +23,7 @@ class ArgsConfig:
 
     retriever_path: str = "models/retriever/default"
     memory_name: str = "memory"
+    memory_path: Optional[str] = None
     checkpoint_path: str = "models/ravla/default/checkpoint_3"
 
     denoising_steps: int = 4
@@ -50,7 +53,11 @@ def main(config: ArgsConfig):
         torch_dtype=torch.bfloat16,
         device_map=device,
     ).eval()
-    memory = torch.load(f"{config.retriever_path}/{config.memory_name}.pt", map_location=device)
+    memory_path = (
+        Path(config.memory_path) if config.memory_path is not None
+        else Path(config.retriever_path) / f"{config.memory_name}.pt"
+    )
+    memory = torch.load(memory_path, map_location=device)
 
     vla = RAVLA.from_pretrained(
         config.checkpoint_path,
