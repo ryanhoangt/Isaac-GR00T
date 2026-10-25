@@ -54,6 +54,9 @@ class ArgsConfig:
     """
 
     # Training parameters
+    seed: int = 42
+    """Random seed for initialization, dataset sampling, and the trainer."""
+
     batch_size: int = 32
     """Batch size per GPU for training."""
 
@@ -146,6 +149,10 @@ class ArgsConfig:
     balance_trajectory_weights: bool = True
     """Used in LeRobotMixtureDataset. If True, sample trajectories within a dataset weighted by their length; otherwise, equal weighting."""
 
+    def __post_init__(self):
+        if not 0 <= self.seed < 2**32:
+            raise ValueError("seed must be an integer between 0 and 4294967295")
+
 
 #####################################################################################
 # Helper functions
@@ -206,7 +213,7 @@ def _copy_partial_action_expert_weights(old_dict, new_dict, old_dim, new_dim):
 def main(config: ArgsConfig):
     """Main training function."""
     # Seed newly initialized embodiment weights as well as the training loop.
-    set_seed(42)
+    set_seed(config.seed)
     # ------------ step 1: load dataset ------------
     embodiment_tag = EmbodimentTag(config.embodiment_tag)
 
@@ -247,7 +254,7 @@ def main(config: ArgsConfig):
             mode="train",
             balance_dataset_weights=config.balance_dataset_weights,
             balance_trajectory_weights=config.balance_trajectory_weights,
-            seed=42,
+            seed=config.seed,
             metadata_config={
                 "percentile_mixing_method": "weighted_average",
             },
@@ -387,7 +394,8 @@ def main(config: ArgsConfig):
         # evaluation_strategy="no",
         save_total_limit=config.save_total_limit,
         report_to=config.report_to,
-        seed=42,
+        seed=config.seed,
+        data_seed=config.seed,
         do_eval=False,
         ddp_find_unused_parameters=False,
         ddp_bucket_cap_mb=100,

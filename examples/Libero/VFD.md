@@ -33,6 +33,12 @@ ensemble used in the paper. A stronger experiment uses two different-seed models
 trained on the same three source suites, at comparable training budgets. Never
 pair different LOSO folds: one member would have trained on the other's held-out suite.
 
+To prepare a second independent Spatial member, use
+`bash scripts/submit_libero_loso.sh --seed 43 --dry-run spatial` to review the
+submission, then remove `--dry-run` to submit. The default seed remains 42.
+Pair equal-epoch checkpoints from the two runs, and recalibrate thresholds for
+the new pair; thresholds from the snapshot pair are not interchangeable.
+
 ## Calibration and held-out test
 
 The following example uses a global threshold calibrated on successful rollouts

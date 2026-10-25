@@ -11,11 +11,19 @@
 
 set -euo pipefail
 
-# Arguments: suite to hold out, absolute output root for this four-run experiment.
+# Arguments: held-out suite, absolute experiment output root, optional training seed.
 held_out="${1:?Specify spatial, object, goal, or long}"
 run_root="${2:?Specify an absolute experiment output root}"
+seed="${3:-${GR00T_TRAIN_SEED:-42}}"
+if [[ ! "$seed" =~ ^[0-9]+$ ]] || (( ${#seed} > 10 )) || (( 10#$seed > 4294967295 )); then
+    echo "seed must be an integer between 0 and 4294967295" >&2
+    exit 2
+fi
+seed=$((10#$seed))
 case "$held_out" in spatial|object|goal|long) ;; *) exit 2 ;; esac
-repo="${SLURM_SUBMIT_DIR:?}"
+launch_mode="${GR00T_LAUNCH_MODE:-slurm}"
+case "$launch_mode" in slurm|direct) ;; *) echo "Unknown launch mode: $launch_mode" >&2; exit 2 ;; esac
+repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo"
 python_bin="${GR00T_PYTHON:-/home/vhoangth2/miniconda3/envs/gr00t/bin/python}"
 data_root="${LIBERO_DATA_ROOT:-$repo/demo_data/libero_loso_clean}"
@@ -45,8 +53,12 @@ export WANDB_DISABLED=false
 export WANDB_PROJECT="${WANDB_PROJECT:-gr00t-libero-loso}"
 export WANDB_ENTITY="${WANDB_ENTITY:-ryan-nlp}"
 export WANDB_RUN_GROUP="${WANDB_RUN_GROUP:-$(basename "$run_root")}"
-export WANDB_NAME="heldout_${held_out}_job_${SLURM_JOB_ID}"
-export WANDB_RUN_ID="loso-${held_out}-${SLURM_JOB_ID}"
+job_tag="${SLURM_JOB_ID:-interactive}"
+if [[ "$launch_mode" = direct ]]; then
+    job_tag="${job_tag}-$(date -u +%Y%m%dT%H%M%SZ)-$$"
+fi
+export WANDB_NAME="heldout_${held_out}_seed_${seed}_job_${job_tag}"
+export WANDB_RUN_ID="loso-${held_out}-s${seed}-${job_tag}"
 export WANDB_RESUME=never
 export WANDB_DIR="$output_dir"
 export WANDB_LOG_MODEL=false
@@ -58,13 +70,13 @@ for suite in spatial object goal long; do
     fi
 done
 
-"$python_bin" - "$output_dir" "$held_out" "$base_model" "${datasets[@]}" <<'PY'
+"$python_bin" - "$output_dir" "$held_out" "$base_model" "$seed" "$launch_mode" "${datasets[@]}" <<'PY'
 import json
 import os
 import sys
 from pathlib import Path
 
-output, held_out, base_model, *datasets = sys.argv[1:]
+output, held_out, base_model, seed, launch_mode, *datasets = sys.argv[1:]
 manifest = {
     "held_out_suite": held_out,
     "training_datasets": datasets,
@@ -73,8 +85,10 @@ manifest = {
     "num_train_epochs": 2,
     "batch_size": 32,
     "gradient_accumulation_steps": 1,
-    "seed": 42,
+    "seed": int(seed),
+    "data_seed": int(seed),
     "slurm_job_id": os.environ.get("SLURM_JOB_ID"),
+    "execution_mode": launch_mode,
     "report_to": "wandb",
     "wandb_project": os.environ["WANDB_PROJECT"],
     "wandb_entity": os.environ.get("WANDB_ENTITY"),
@@ -86,12 +100,17 @@ print(json.dumps(manifest, indent=2), flush=True)
 PY
 
 nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
-srun --unbuffered "$python_bin" scripts/gr00t_finetune.py \
+launcher=()
+if [[ "$launch_mode" = slurm ]]; then
+    launcher=(srun --unbuffered)
+fi
+"${launcher[@]}" "$python_bin" scripts/gr00t_finetune.py \
     --base-model-path "$base_model" \
     --dataset-path "${datasets[@]}" \
     --data-config examples.Libero.custom_data_config:LiberoDataConfig \
     --embodiment-tag new_embodiment \
     --num-gpus 1 \
+    --seed "$seed" \
     --batch-size 32 \
     --gradient-accumulation-steps 1 \
     --num-train-epochs 2 \

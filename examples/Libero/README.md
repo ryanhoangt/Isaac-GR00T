@@ -230,11 +230,64 @@ Use `goal/meta/episode_mapping.json` to map the cleaned IDs back to the original
 To restart only selected configurations in a new output directory, pass their
 held-out suites, for example `bash scripts/submit_libero_loso.sh spatial object long`.
 
+The training seed defaults to 42. To train an additional independent member for
+the held-out Spatial fold with seed 43, first preview and then submit:
+
+```bash
+bash scripts/submit_libero_loso.sh --seed 43 --dry-run spatial
+bash scripts/submit_libero_loso.sh --seed 43 spatial
+```
+
+`--dry-run` prints the exact `sbatch` command without creating outputs or
+submitting a job. `--seed=N` and the `GR00T_TRAIN_SEED` environment variable are
+also supported; an explicit flag takes precedence. Direct fine-tuning accepts
+`python scripts/gr00t_finetune.py ... --seed 43`. The seed controls model
+initialization, mixture sampling, and trainer/data sampling, and is recorded in
+the run manifest and W&B configuration. Use the same original pretrained base,
+source datasets and training budget as seed 42; do not resume seed 42's checkpoint.
+The two epoch-2 checkpoints can then serve as VFD actor/scorer with a newly
+calibrated threshold. The launcher still retains checkpoints at both epochs 1 and 2.
+
+### Sequential training in an existing GPU allocation
+
+To use the GPU already assigned to an interactive session, run:
+
+```bash
+bash scripts/train_libero_loso_sequential.sh --seed 43 --dry-run
+bash scripts/train_libero_loso_sequential.sh --seed 43
+```
+
+This runs Spatial, Object, Goal, then Long sequentially. Each fold is a separate
+Python process started from the same original pretrained base, with the same
+two-epoch recipe and two saved checkpoints. It calls neither `sbatch` nor `srun`,
+preserves `CUDA_VISIBLE_DEVICES`, and uses the current allocation until it ends.
+Keep the session alive and ensure its remaining time covers the requested folds.
+The existing batch worker is reused with `GR00T_LAUNCH_MODE=direct`.
+
+Outputs go to `outputs/libero_loso/<timestamp>_seed43_sequential/`, with one
+`heldout_<suite>/` checkpoint directory, `heldout_<suite>.log`, and W&B run per
+fold. `sequence.tsv` tracks progress. A fold failure stops the sequence before
+starting any remaining folds, and existing output roots are never overwritten.
+`--dry-run` prints the plan without loading CUDA, writing outputs, or training.
+
+Use `--output-root /absolute/new/path` for an explicit destination. To run only
+selected folds, append their names, for example:
+
+```bash
+bash scripts/train_libero_loso_sequential.sh --seed 43 object goal long
+```
+
+`GR00T_PYTHON`, `LIBERO_DATA_ROOT`, `GR00T_BASE_MODEL`, `LOSO_RUN_ROOT`, and W&B
+settings work as with the batch launcher. The default training seed remains 42.
+
+### Batch-job outputs
+
 The submission script records four job IDs in
-`outputs/libero_loso/<timestamp>/submissions.tsv`. Logs go to
-`outputs/slurm/gr00t-loso-<held-out-suite>_<job-id>.{out,err}`.
+`outputs/libero_loso/<timestamp>_seed<seed>/submissions.tsv` when all suites are
+selected; the TSV includes the training seed. Logs go to
+`outputs/slurm/gr00t-loso-<held-out-suite>-s<seed>_<job-id>.{out,err}`.
 Metrics are logged to W&B online in project `gr00t-libero-loso`, grouped by
-the experiment timestamp, with one run per held-out suite and Slurm job ID.
+the experiment directory, with seed-labelled runs per held-out suite and Slurm job ID.
 Existing W&B login credentials must be available on compute nodes. Override
 `WANDB_PROJECT` and `WANDB_ENTITY` before submission to choose a destination.
 Checkpoint uploads to W&B are disabled; weights stay on the cluster.
