@@ -97,8 +97,7 @@ class EagleBackbone(nn.Module):
     def prepare_input(self, batch: dict) -> BatchFeature:
         return BatchFeature(data=batch)
 
-    def forward_eagle(self, vl_input: BatchFeature) -> BatchFeature:
-        eagle_prefix = "eagle_"
+    def forward_eagle(self, vl_input: BatchFeature, eagle_prefix="eagle_") -> BatchFeature:
         eagle_input = {
             k.removeprefix(eagle_prefix): v
             for k, v in vl_input.items()
@@ -128,6 +127,12 @@ class EagleBackbone(nn.Module):
                     dummy_term = dummy_term + 0.0 * param.sum()
             eagle_embeds = eagle_embeds + dummy_term
 
-        return BatchFeature(
-            data={"backbone_features": eagle_embeds, "backbone_attention_mask": eagle_mask}
-        )  # [B, T2, hidden_size]
+        output = {"backbone_features": eagle_embeds, "backbone_attention_mask": eagle_mask}
+        if "goal_mode_id" in vl_input:
+            output["goal_mode_id"] = vl_input["goal_mode_id"].reshape(-1)
+            # Current observations and goals never share a VLM conversation.
+            # An inactive goal therefore cannot leak into current-view features.
+            if output["goal_mode_id"].bool().any():
+                features, mask = self.forward_eagle(vl_input, "goal_eagle_")
+                output.update(goal_features=features, goal_attention_mask=mask)
+        return BatchFeature(data=output)  # [B, T2, hidden_size]

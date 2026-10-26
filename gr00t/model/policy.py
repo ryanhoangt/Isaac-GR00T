@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import json
+from contextlib import nullcontext
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
@@ -187,7 +188,11 @@ class Gr00tPolicy(BasePolicy):
 
     def _get_action_from_normalized_input(self, normalized_input: Dict[str, Any]) -> torch.Tensor:
         # Set up autocast context if needed
-        with torch.inference_mode(), torch.autocast(device_type="cuda", dtype=COMPUTE_DTYPE):
+        autocast = (
+            torch.autocast(device_type="cuda", dtype=COMPUTE_DTYPE)
+            if torch.device(self.device).type == "cuda" else nullcontext()
+        )
+        with torch.inference_mode(), autocast:
             model_pred = self.model.get_action(normalized_input)
 
         normalized_action = model_pred["action_pred"].float()
@@ -237,7 +242,10 @@ class Gr00tPolicy(BasePolicy):
         return True
 
     def _load_model(self, model_path):
-        model = GR00T_N1_5.from_pretrained(model_path, torch_dtype=COMPUTE_DTYPE)
+        dtype = COMPUTE_DTYPE if torch.device(self.device).type == "cuda" else torch.float32
+        model = GR00T_N1_5.from_pretrained(
+            model_path, torch_dtype=dtype, tune_llm=False, tune_visual=False
+        )
         model.eval()  # Set model to eval mode
 
         # Update action_horizon to match modality config

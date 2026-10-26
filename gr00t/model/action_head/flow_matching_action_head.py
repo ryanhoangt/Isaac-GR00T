@@ -146,6 +146,7 @@ class FlowmatchingActionHeadConfig(PretrainedConfig):
 
     freeze_decode_layer: bool = field(default=False)
     expand_batch: int = field(default=None)
+    goal_conditioning: bool = field(default=False)
     use_vlln: bool = field(default=True)
 
     vl_self_attention_cfg: dict = field(default=None)
@@ -212,7 +213,16 @@ class FlowmatchingActionHead(nn.Module):
         self.beta_dist = Beta(config.noise_beta_alpha, config.noise_beta_beta)
         self.num_timestep_buckets = config.num_timestep_buckets
         self.config = config
+        if config.goal_conditioning:
+            self.enable_goal_conditioning()
         self.set_trainable_parameters(config.tune_projector, config.tune_diffusion_model)
+
+    def enable_goal_conditioning(self):
+        from gr00t.model.goal_conditioning import GoalConditioning
+
+        if not hasattr(self, "goal_conditioner"):
+            self.goal_conditioner = GoalConditioning(self.config.backbone_embedding_dim)
+        self.config.goal_conditioning = True
 
     def set_trainable_parameters(self, tune_projector: bool, tune_diffusion_model: bool):
         self.tune_projector = tune_projector
@@ -263,7 +273,22 @@ class FlowmatchingActionHead(nn.Module):
     def process_backbone_output(self, backbone_output: BatchFeature) -> BatchFeature:
         backbone_features = backbone_output["backbone_features"]
         backbone_features = self.vlln(backbone_features)
-        backbone_features = self.vl_self_attention(backbone_features)
+        if self.config.goal_conditioning:
+            mask = backbone_output["backbone_attention_mask"]
+            if self.config.use_vlln:
+                backbone_features = self.vl_self_attention(backbone_features, attention_mask=mask)
+            goal = backbone_output.get("goal_features")
+            goal_mask = backbone_output.get("goal_attention_mask")
+            if goal is not None:
+                goal = self.vlln(goal)
+                if self.config.use_vlln:
+                    goal = self.vl_self_attention(goal, attention_mask=goal_mask)
+            backbone_features, mask = self.goal_conditioner(
+                backbone_features, mask, backbone_output["goal_mode_id"], goal, goal_mask
+            )
+            backbone_output["backbone_attention_mask"] = mask
+        else:
+            backbone_features = self.vl_self_attention(backbone_features)
         backbone_output["backbone_features"] = backbone_features
         return backbone_output
 
@@ -325,7 +350,9 @@ class FlowmatchingActionHead(nn.Module):
         future_tokens = self.future_tokens.weight.unsqueeze(0).expand(vl_embs.shape[0], -1, -1)
         sa_embs = torch.cat((state_features, future_tokens, action_features), dim=1)
 
-        vl_attn_mask = backbone_output.backbone_attention_mask
+        vl_attn_mask = (
+            backbone_output.backbone_attention_mask if self.config.goal_conditioning else None
+        )
 
         model_output = self.model(
             hidden_states=sa_embs,
@@ -391,10 +418,14 @@ class FlowmatchingActionHead(nn.Module):
             sa_embs = torch.cat((state_features, future_tokens, action_features), dim=1)
 
             # Run model forward.
+            conditioning_kwargs = {}
+            if getattr(self.config, "goal_conditioning", False):
+                conditioning_kwargs["encoder_attention_mask"] = backbone_output.backbone_attention_mask
             model_output = self.model(
                 hidden_states=sa_embs,
                 encoder_hidden_states=vl_embs,
                 timestep=timesteps_tensor,
+                **conditioning_kwargs,
             )
             pred = self.action_decoder(model_output, embodiment_id)
 

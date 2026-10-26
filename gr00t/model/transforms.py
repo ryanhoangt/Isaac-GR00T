@@ -59,7 +59,7 @@ def collate(features: List[dict], eagle_processor) -> dict:
     for key in keys:
         values = [elem[key] for elem in features]
 
-        if key == "eagle_content":
+        if key in ("eagle_content", "goal_eagle_content"):
             text_list = []
             image_inputs = []
             for v in values:
@@ -71,7 +71,7 @@ def collate(features: List[dict], eagle_processor) -> dict:
                 text=text_list, images=image_inputs, return_tensors="pt", padding=True
             )
             for k, v in eagle_inputs.items():
-                k = "eagle_" + k
+                k = ("goal_eagle_" if key == "goal_eagle_content" else "eagle_") + k
                 batch[k] = v
         elif key in ("pixel_values", "image_grid_thw", "attention_mask", "input_ids"):
             # Concat in existing batch dimension.

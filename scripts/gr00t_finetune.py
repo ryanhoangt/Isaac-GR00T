@@ -44,6 +44,9 @@ class ArgsConfig:
     output_dir: str = "/tmp/gr00t"
     """Directory to save model checkpoints."""
 
+    pilot2_goals: bool = False
+    """Enable train-only paired subgoals and the optional Pilot 2 DiT conditioning."""
+
     data_config: str = "fourier_gr1_arms_only"
     """
     Data configuration to use for training.
@@ -134,6 +137,9 @@ class ArgsConfig:
     report_to: Literal["wandb", "tensorboard", "azure_ml"] = "wandb"
     """Where to report training metrics (e.g., 'wandb', 'tensorboard', 'azure_ml')."""
 
+    logging_steps: int = 10
+    """Optimizer steps between training metric logs."""
+
     # Data loading parameters
     embodiment_tag: Literal[tuple(EMBODIMENT_TAG_MAPPING.keys())] = "new_embodiment"
     """Embodiment tag to use for training. e.g. 'new_embodiment', 'gr1'"""
@@ -222,9 +228,20 @@ def main(config: ArgsConfig):
     modality_configs = data_config_cls.modality_config()
     transforms = data_config_cls.transform()
 
+    dataset_class = LeRobotSingleDataset
+    if config.pilot2_goals:
+        from examples.Libero.pilot2.dataset import GoalDataset
+        from examples.Libero.pilot2.transforms import GoalTransform
+
+        if not isinstance(transforms.transforms[-1], GoalTransform):
+            raise ValueError("--pilot2-goals requires the Pilot 2 GoalDataConfig")
+        if config.tune_llm or config.tune_visual:
+            raise ValueError("Pilot 2 requires the frozen Eagle backbone")
+        dataset_class = GoalDataset
+
     # 1.2 data loader: we will use either single dataset or mixture dataset
     if len(config.dataset_path) == 1:
-        train_dataset = LeRobotSingleDataset(
+        train_dataset = dataset_class(
             dataset_path=config.dataset_path[0],
             modality_configs=modality_configs,
             transforms=transforms,
@@ -237,7 +254,7 @@ def main(config: ArgsConfig):
             assert os.path.exists(p), f"Dataset path {p} does not exist"
             ## We use the same transforms, modality configs, and embodiment tag for all datasets here,
             ## in reality, you can use dataset from different modalities and embodiment tags
-            dataset = LeRobotSingleDataset(
+            dataset = dataset_class(
                 dataset_path=p,
                 modality_configs=modality_configs,
                 transforms=transforms,
@@ -350,6 +367,15 @@ def main(config: ArgsConfig):
             tune_projector=config.tune_projector, tune_diffusion_model=config.tune_diffusion_model
         )
 
+    if config.pilot2_goals:
+        model.action_head.enable_goal_conditioning()
+        model.config.action_head_cfg["goal_conditioning"] = True
+        goal_conditioner = model.action_head.goal_conditioner
+        initial_goal_weights = {
+            name: value.detach().float().cpu().clone()
+            for name, value in goal_conditioner.named_parameters()
+        }
+
     # Set the model's compute_dtype to bfloat16
     model.compute_dtype = "bfloat16"
     model.config.compute_dtype = "bfloat16"
@@ -386,7 +412,7 @@ def main(config: ArgsConfig):
         weight_decay=config.weight_decay,
         warmup_ratio=config.warmup_ratio,
         lr_scheduler_type="cosine",
-        logging_steps=10.0,
+        logging_steps=config.logging_steps,
         num_train_epochs=config.num_train_epochs,
         max_steps=config.max_steps,
         save_strategy=config.save_strategy,
@@ -412,6 +438,16 @@ def main(config: ArgsConfig):
 
     # 2.3 run experiment
     experiment.train(save_final_model=config.save_final_model)
+    if config.pilot2_goals and int(os.environ.get("RANK", "0")) == 0:
+        import json
+
+        changes = {
+            name: float((value.detach().float().cpu() - initial_goal_weights[name]).norm())
+            for name, value in goal_conditioner.named_parameters()
+        }
+        (Path(config.output_dir) / "goal_conditioning_check.json").write_text(
+            json.dumps({"parameter_change_l2": changes}, indent=2) + "\n"
+        )
 
 
 if __name__ == "__main__":

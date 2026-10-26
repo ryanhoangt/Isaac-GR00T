@@ -92,7 +92,9 @@ class TrainRunner:
 
         # Set up reporting
         report_to = training_args.report_to
-        if report_to == "wandb":
+        if isinstance(report_to, str):
+            report_to = [report_to]
+        if "wandb" in report_to:
             # Set the environment variables for wandb
             if "WANDB_PROJECT" not in os.environ:
                 os.environ["WANDB_PROJECT"] = "gr00t-training"
@@ -112,9 +114,9 @@ class TrainRunner:
                     f,
                 )
             training_args.report_to = ["wandb"]
-        elif report_to == "azure_ml":
+        elif "azure_ml" in report_to:
             print("azure_ml logging is enabled.")
-        else:  # Default to tensorboard
+        elif "tensorboard" in report_to:
             tensorboard_dir = Path(training_args.output_dir) / "runs"
             tensorboard_dir.mkdir(parents=True, exist_ok=True)
             print(f"TensorBoard logs will be saved to: {tensorboard_dir}")
