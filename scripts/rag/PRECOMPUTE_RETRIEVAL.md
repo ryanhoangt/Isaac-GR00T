@@ -1,5 +1,7 @@
 # Offline RA-VLA retrieval diagnostics
 
+To browse the resulting caches interactively, see [the Streamlit viewer](RETRIEVAL_VIEWER.md).
+
 Recompute top-K retrieved segments from saved LIBERO rollout MP4s without running
 the simulator again. The script reads each run's `commands.json` to select the
 same RA-VLA checkpoint, retriever and task memory used during evaluation.

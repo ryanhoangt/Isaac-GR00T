@@ -1,0 +1,3 @@
+# Install into a venv inheriting the existing gr00t environment (see docs).
+streamlit>=1.42,<2
+numpy>=1.23.5,<2
