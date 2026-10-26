@@ -125,4 +125,5 @@ output/
 
 # RA-VLA evaluation artifacts
 outputs/ravla_eval/
+outputs/retrieval_cache/
 runs/gr00t/
