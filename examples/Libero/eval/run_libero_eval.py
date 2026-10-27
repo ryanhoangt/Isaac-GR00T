@@ -72,6 +72,8 @@ class GenerateConfig:
     host: str = "localhost"
     task_ids: Optional[List[int]] = None
     """Evaluate only these task IDs; by default evaluate the entire suite."""
+    inference_timeout_ms: int = 15000
+    """RPC timeout; shared-server evaluations can allow time for queued requests."""
 
 
 class GR00TPolicy:
@@ -90,10 +92,10 @@ class GR00TPolicy:
         },
     }
 
-    def __init__(self, host="localhost", port=5555, headless=False):
+    def __init__(self, host="localhost", port=5555, headless=False, inference_timeout_ms=15000):
         from gr00t.eval.service import ExternalRobotInferenceClient
 
-        self.policy = ExternalRobotInferenceClient(host=host, port=port)
+        self.policy = ExternalRobotInferenceClient(host=host, port=port, timeout_ms=inference_timeout_ms)
         self.config = self.LIBERO_CONFIG
         self.action_keys = ["x", "y", "z", "roll", "pitch", "yaw", "gripper"]
         self.headless = headless
@@ -190,7 +192,10 @@ def eval_libero(cfg: GenerateConfig) -> None:
         # Initialize LIBERO environment and task description
         env, task_description = get_libero_env(task, resolution=256)
 
-        gr00t_policy = GR00TPolicy(host=cfg.host, port=cfg.port, headless=cfg.headless)
+        gr00t_policy = GR00TPolicy(
+            host=cfg.host, port=cfg.port, headless=cfg.headless,
+            inference_timeout_ms=cfg.inference_timeout_ms,
+        )
 
         # Start episodes
         task_episodes, task_successes = 0, 0

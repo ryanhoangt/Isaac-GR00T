@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
+import os
 import tyro
 import torch
 
@@ -31,6 +32,7 @@ class ArgsConfig:
 
     host: str = "0.0.0.0"
     port: int = 8071
+    server_id: Optional[str] = None
 
 
 def main(config: ArgsConfig):
@@ -79,6 +81,12 @@ def main(config: ArgsConfig):
     )
 
     server = RobotInferenceServer(policy, config.host, config.port)
+    server.register_endpoint(
+        "server_info",
+        lambda: {"server_id": config.server_id, "pid": os.getpid(),
+                 "checkpoint_path": str(Path(config.checkpoint_path).resolve())},
+        requires_input=False,
+    )
     server.run()
 
 

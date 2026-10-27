@@ -1,4 +1,76 @@
-# Evaluate the released RA-VLA checkpoints on LIBERO
+# RA-VLA training and LIBERO evaluation
+
+## Training logs with Weights & Biases
+
+Training decodes videos on demand by default (`--no-cache-video`), keeping an LRU
+cache of at most `--video-cache-size 2` camera videos per dataset per worker.
+It selects frames by the same integer indices as the original RAM cache,
+avoiding rounding differences from timestamp-based seeking. It does not load or
+create the datasets' `.cache/frames.pt` files. The recipe, dataset metadata,
+augmentations and model are unchanged. `--cache-video`
+opts into the original full-RAM cache; building it can use substantially more
+memory than the final arrays because concatenation and serialization create
+temporary copies. A 128 GiB allocation can run out of memory during this step.
+
+`python -m scripts.rag.3_train_ravla` enables W&B logging by default. Add these
+options to the training command to label a run explicitly:
+
+```bash
+--wandb-project icl-vla-uncertainty \
+--wandb-name gos_seed42 \
+--wandb-group libero_long_loso \
+--wandb-mode online \
+--log-freq 20
+```
+
+`--wandb-entity` selects a team or account. Authenticate with `wandb login` before
+online training if the environment is not already logged in. Without an explicit
+mode, W&B respects `WANDB_MODE`; `--wandb-mode offline` records locally and
+`--no-wandb-enable` turns logging off. The project defaults to
+`icl-vla-uncertainty` (override with `--wandb-project`), and the name defaults to
+`WANDB_NAME` or the output directory name.
+
+Step logs include total, MSE and margin losses, the learning rate used for that
+update, and the gradient norm before clipping. They use optimizer `global_step`
+as the x-axis and are emitted at the first step, every `log_freq` steps and the
+end of each epoch. Epoch logs include mean losses, duration and peak allocated
+GPU memory. Run config records the recipe and seed; summary records completed
+epochs, steps and the last saved checkpoint path. Checkpoint weights are not
+uploaded. `training_config.json` and the local W&B files are stored in `vla_path`.
+The run is finalized on completion, errors and keyboard interruption. Training
+itself still has no checkpoint-resume support.
+
+## Evaluate the released RA-VLA checkpoints on LIBERO
+
+For concurrent task evaluation, use one policy server and a bounded simulator
+pool (defaults: five workers, 20 trials/task):
+
+```bash
+bash scripts/eval_ravla_parallel.sh --subset long \
+  --checkpoint-path outputs/ravla_train/YOUR_RUN/checkpoint_3 \
+  --workers 5 --trials 20 --seed 0 --k 1 --denoising-steps 4 \
+  --port 8085 --run-name gos_seed42_long20_parallel
+```
+
+`--task-ids 0 3 --trials 1 --workers 2` is a small smoke test. `--dry-run`
+validates paths and prints commands without loading models or creating outputs.
+One process is started per task, up to the worker limit; slots take the next task
+when one finishes. Every simulator owns its action queue, output directory, and
+Numba/Hugging Face/Matplotlib caches. The policy server serializes requests using
+the existing ZeroMQ REP protocol; it does not batch or concurrently invoke the
+action head. The shared-server RPC timeout defaults to 120 seconds. Simulator
+BLAS/OpenMP threads are limited to one, while environment seeds, initial states,
+action horizon and task horizons retain the original evaluator's behavior.
+
+The launcher verifies a unique server ID before starting workers, locks its port,
+refuses existing output directories, and terminates its child process groups on
+failure or interruption. It never adopts or kills another run's server. A failed
+process aborts evaluation rather than being counted as a policy failure.
+`tasks/taskNN/` holds each task's logs/videos; `progress.json` is atomically updated
+with live episode counts. `rollouts/summary.json` aggregates validated completed
+tasks; check `status: completed` before interpreting it as a full-suite result.
+The aggregate rollout directory links to the original per-task videos with
+unique episode numbers. Summary/progress files have a single parent writer.
 
 Use `scripts/eval_ravla_libero.sh` from any working directory. Relative paths in
 its arguments are resolved against the repository root. The policy and simulator run in separate
