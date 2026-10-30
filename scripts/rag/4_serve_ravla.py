@@ -33,6 +33,9 @@ class ArgsConfig:
     host: str = "0.0.0.0"
     port: int = 8071
     server_id: Optional[str] = None
+    scorer_path: Optional[str] = None
+    """Enable the optional atomic action + U_ctx RPC using a second checkpoint."""
+    flow_times: Optional[list[float]] = None
 
 
 def main(config: ArgsConfig):
@@ -81,6 +84,16 @@ def main(config: ArgsConfig):
     )
 
     server = RobotInferenceServer(policy, config.host, config.port)
+    if config.scorer_path is not None:
+        from gr00t.rag.context_vfd import ContextVFDPolicy
+
+        monitor = ContextVFDPolicy.from_actor_policy(
+            policy, config.checkpoint_path, config.scorer_path, config.retriever_path, memory_path,
+            denoising_steps=config.denoising_steps, flow_times=config.flow_times,
+        )
+        server.register_endpoint("get_action_with_uncertainty", monitor.get_action_with_uncertainty)
+        server.register_endpoint("get_action_with_context_diagnostics", monitor.get_action_with_context_diagnostics)
+        server.register_endpoint("get_score_signature", monitor.get_score_signature, requires_input=False)
     server.register_endpoint(
         "server_info",
         lambda: {"server_id": config.server_id, "pid": os.getpid(),

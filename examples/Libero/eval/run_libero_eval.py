@@ -74,6 +74,9 @@ class GenerateConfig:
     """Evaluate only these task IDs; by default evaluate the entire suite."""
     inference_timeout_ms: int = 15000
     """RPC timeout; shared-server evaluations can allow time for queued requests."""
+    record_uctx: bool = False
+    context_diagnostics: bool = False
+    save_observations: bool = False
 
 
 class GR00TPolicy:
@@ -92,7 +95,8 @@ class GR00TPolicy:
         },
     }
 
-    def __init__(self, host="localhost", port=5555, headless=False, inference_timeout_ms=15000):
+    def __init__(self, host="localhost", port=5555, headless=False, inference_timeout_ms=15000,
+                 recording_root=None, context_diagnostics=False, save_observations=False):
         from gr00t.eval.service import ExternalRobotInferenceClient
 
         self.policy = ExternalRobotInferenceClient(host=host, port=port, timeout_ms=inference_timeout_ms)
@@ -100,19 +104,50 @@ class GR00TPolicy:
         self.action_keys = ["x", "y", "z", "roll", "pitch", "yaw", "gripper"]
         self.headless = headless
         self.actions = deque()
+        self.recording_root = recording_root
+        self.context_diagnostics = context_diagnostics
+        self.save_observations = save_observations
+        self.recorder = None
+        self.control_step = 0
+        self.score_signature = (self.policy.call_endpoint("get_score_signature", requires_input=False)
+                                if recording_root is not None else None)
 
-    def reset(self):
+    def reset(self, task_id=None, episode_index=None):
         self.actions.clear()
+        self.control_step = 0
+        if self.recording_root is not None:
+            from pathlib import Path
+            from examples.Libero.eval.uncertainty_recording import EpisodeUncertaintyRecorder
+            if task_id is None or episode_index is None:
+                raise ValueError("recording requires task and episode IDs")
+            self.recorder = EpisodeUncertaintyRecorder(
+                Path(self.recording_root) / f"task{task_id:02d}_init{episode_index:03d}",
+                task_id, episode_index, self.score_signature, self.save_observations,
+            )
 
     def get_action(self, observation_dict, lang: str):
         """Get action from GR00T policy given observation and language instruction."""
         if len(self.actions) == 0:
             obs_dict = self._process_observation(observation_dict, lang)
             # summarize_obs(obs_dict)
-            action_chunk = self.policy.get_action(obs_dict)
+            if self.recording_root is None:
+                result = None
+                action_chunk = self.policy.get_action(obs_dict)
+            else:
+                endpoint = ("get_action_with_context_diagnostics" if self.context_diagnostics
+                            else "get_action_with_uncertainty")
+                result = self.policy.call_endpoint(endpoint, obs_dict)
+                action_chunk = result["action"]
             actions = self._convert_to_libero_action(action_chunk)
+            if self.recorder is not None:
+                self.recorder.record(self.control_step, obs_dict, result, actions)
             self.actions.extend(actions)
+        self.control_step += 1
         return self.actions.popleft()
+
+    def finish_episode(self, success):
+        if self.recorder is not None:
+            self.recorder.finish(success, self.control_step)
 
     def _process_observation(self, obs, lang: str):
         """Convert Libero observation to GR00T format."""
@@ -159,6 +194,8 @@ class GR00TPolicy:
 
 
 def eval_libero(cfg: GenerateConfig) -> None:
+    if (cfg.context_diagnostics or cfg.save_observations) and not cfg.record_uctx:
+        raise ValueError("context diagnostics / raw observation saving require --record-uctx")
     log_dir = cfg.output_dir or f"./runs/gr00t/{cfg.task_suite_name}/{cfg.run_name}"
     os.makedirs(log_dir, exist_ok=True)  # ensures directory exists
 
@@ -195,6 +232,8 @@ def eval_libero(cfg: GenerateConfig) -> None:
         gr00t_policy = GR00TPolicy(
             host=cfg.host, port=cfg.port, headless=cfg.headless,
             inference_timeout_ms=cfg.inference_timeout_ms,
+            recording_root=os.path.join(log_dir, "uncertainty") if cfg.record_uctx else None,
+            context_diagnostics=cfg.context_diagnostics, save_observations=cfg.save_observations,
         )
 
         # Start episodes
@@ -205,7 +244,7 @@ def eval_libero(cfg: GenerateConfig) -> None:
 
             # Reset environment
             env.reset()
-            gr00t_policy.reset()
+            gr00t_policy.reset(task_id=task_id, episode_index=episode_idx)
 
             # Set initial states
             obs = env.set_init_state(initial_states[episode_idx])
@@ -266,6 +305,7 @@ def eval_libero(cfg: GenerateConfig) -> None:
 
             task_episodes += 1
             total_episodes += 1
+            gr00t_policy.finish_episode(done)
             episode_results.append({
                 "task_id": task_id,
                 "task_description": task_description,

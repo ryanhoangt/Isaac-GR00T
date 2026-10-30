@@ -370,6 +370,12 @@ def build_plan(args):
     ]:
         if not path.is_file():
             raise FileNotFoundError(path)
+    if args.record_uctx and args.scorer_path is None:
+        raise ValueError("--record-uctx requires --scorer-path")
+    if (args.context_diagnostics or args.save_observations) and not args.record_uctx:
+        raise ValueError("context diagnostics / observations require --record-uctx")
+    if args.scorer_path and not (repo / args.scorer_path / "config.json").is_file():
+        raise FileNotFoundError(args.scorer_path)
     name = (
         args.run_name
         or f"ravla_parallel_{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}_{uuid.uuid4().hex[:6]}"
@@ -436,6 +442,12 @@ def build_plan(args):
         ]
         for task in task_ids
     }
+    if args.scorer_path:
+        server.extend(["--scorer-path", str((repo / args.scorer_path).resolve())])
+    for command in tasks.values():
+        for flag in ["record_uctx", "context_diagnostics", "save_observations"]:
+            if getattr(args, flag):
+                command.append("--" + flag.replace("_", "-"))
     env = os.environ.copy()
     env.update(
         PYTHONPATH=str(repo) + os.pathsep + env.get("PYTHONPATH", ""),
@@ -475,6 +487,10 @@ def main():
         "--subset", type=parse_suite, choices=SPLITS, default="libero_10"
     )
     parser.add_argument("--checkpoint-path", type=Path)
+    parser.add_argument("--scorer-path", type=Path)
+    parser.add_argument("--record-uctx", action="store_true")
+    parser.add_argument("--context-diagnostics", action="store_true")
+    parser.add_argument("--save-observations", action="store_true")
     parser.add_argument("--retriever-path", type=Path)
     memory = parser.add_mutually_exclusive_group()
     memory.add_argument("--memory-path", type=Path)
