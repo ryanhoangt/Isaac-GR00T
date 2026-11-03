@@ -151,6 +151,26 @@ def test_perturbation_units_and_norm_are_physical_not_normalized_actions():
         np.testing.assert_array_equal(action[3:], np.zeros(4))
 
 
+def test_scaled_disturbances_share_rng_and_direction_and_obey_controller_clipping():
+    values, next_random = [], []
+    for scale in (1, 2, 4):
+        rng = np.random.default_rng(5000)
+        values.append(sample_disturbance(rng, scale))
+        next_random.append(rng.random())
+    np.testing.assert_array_equal(values[1], values[0] * 2)
+    np.testing.assert_array_equal(values[2], values[0] * 4)
+    assert next_random[0] == next_random[1] == next_random[2]
+    controller = SimpleNamespace(
+        input_min=np.full(6, -1), input_max=np.ones(6), output_min=np.full(6, -0.05), output_max=np.full(6, 0.05)
+    )
+    command = disturbed_command(np.zeros(7), values[2], controller)
+    assert np.max(np.abs(command[:3])) <= 1
+    assert np.linalg.norm(command[:3] * 0.05 * 4) < np.linalg.norm(values[2])
+    for scale in (0, -1, np.nan, np.inf):
+        with pytest.raises(ValueError, match="finite and positive"):
+            sample_disturbance(np.random.default_rng(0), scale)
+
+
 def test_reference_retrieval_is_task_restricted_and_clamps_forward_goal(tmp_path, monkeypatch):
     import pandas as pd
     from examples.Libero.pilot2.runtime import ReferenceBuffer
@@ -220,6 +240,9 @@ def test_report_does_not_count_unperturbed_or_smoke_episodes_as_recovery(tmp_pat
         "split_id": "same",
         "settings": {"mode": "language", "strategy": "A", "trigger": 25},
         "episodes": ["trial0", "trial1"],
+        "task_mapping_version": 1,
+        "task_mapping": {"0": {"reference_task_id": 5}},
+        "reference_episode_tasks": {},
     }
     (root / "manifest.json").write_text(json.dumps(manifest))
     for trial in range(2):
@@ -227,6 +250,7 @@ def test_report_does_not_count_unperturbed_or_smoke_episodes_as_recovery(tmp_pat
             json.dumps(
                 {
                     "task_id": 0,
+                    "reference_task_id": 5,
                     "initial_state_index": trial,
                     "smoke_only": False,
                     "success": trial == 0,
@@ -302,7 +326,8 @@ def test_rollout_executes_chunks_and_recovery_uses_post_disturbance_observation(
     from examples.Libero.pilot2.data import LANGUAGE_KEY
 
     class FakeEnv:
-        def __init__(self):
+        def __init__(self, terminal_step=85):
+            self.terminal_step = terminal_step
             controller = SimpleNamespace(
                 input_min=np.full(6, -1),
                 input_max=np.ones(6),
@@ -311,7 +336,8 @@ def test_rollout_executes_chunks_and_recovery_uses_post_disturbance_observation(
             )
             self.robots = [SimpleNamespace(controller=controller)]
             self.env = SimpleNamespace(
-                parsed_problem={"goal_state": [["test"]]}, _eval_predicate=lambda _: self.steps >= 85
+                parsed_problem={"goal_state": [["test"]]},
+                _eval_predicate=lambda _: self.steps >= self.terminal_step,
             )
             self.reset()
 
@@ -330,10 +356,13 @@ def test_rollout_executes_chunks_and_recovery_uses_post_disturbance_observation(
         def set_init_state(self, _):
             return self.obs()
 
+        def get_sim_state(self):
+            return np.r_[self.position, self.steps]
+
         def step(self, action):
             self.steps += 1
             self.position += np.asarray(action)[:3] * 0.05
-            return self.obs(), 0, self.steps >= 85, {}
+            return self.obs(), 0, self.steps >= self.terminal_step, {}
 
     class FakePolicy:
         model = SimpleNamespace(device=torch.device("cpu"))
@@ -348,9 +377,11 @@ def test_rollout_executes_chunks_and_recovery_uses_post_disturbance_observation(
                 for key in ("x", "y", "z", "roll", "pitch", "yaw", "gripper")
             }
 
+    reference_tasks = []
     reference = SimpleNamespace(
-        distance=lambda pos, task: float(np.linalg.norm(pos)),
-        retrieve=lambda image, task: {
+        distance=lambda pos, task: reference_tasks.append(task) or float(np.linalg.norm(pos)),
+        retrieve=lambda image, task: reference_tasks.append(task)
+        or {
             "goal_image": image,
             "goal_position": np.zeros(3),
             "episode": 0,
@@ -377,7 +408,9 @@ def test_rollout_executes_chunks_and_recovery_uses_post_disturbance_observation(
             strategy=strategy,
             trigger=25,
             seed=123,
+            reference_task_id=7,
         )
+        assert result["task_id"] == 0 and result["reference_task_id"] == 7
         assert result["success"] and result["recovery_eligible"]
         assert result["perturbation_applied_steps"] == 4
         assert set(result["contraction_m"]) == {"0", "8", "16", "32"}
@@ -387,3 +420,61 @@ def test_rollout_executes_chunks_and_recovery_uses_post_disturbance_observation(
         all_positions.append(arrays["ee_positions"][:30])
     np.testing.assert_array_equal(all_positions[0], all_positions[1])
     np.testing.assert_array_equal(all_positions[0], all_positions[2])
+    assert set(reference_tasks) == {7}
+    hashes = []
+    for strategy in ("A", "B", "C"):
+        result, arrays = rollout(
+            FakeEnv(300),
+            np.zeros(8),
+            SimpleNamespace(language="task"),
+            0,
+            adapter,
+            FakePolicy(),
+            reference,
+            strategy=strategy,
+            trigger=60,
+            seed=123,
+            max_steps=110,
+            reference_task_id=7,
+        )
+        assert result["perturbation_applied_steps"] == 4
+        np.testing.assert_allclose(result["perturbation_command_offset_m"], result["perturbation_target_m"])
+        assert arrays["executed_actions"].shape == arrays["nominal_actions"].shape == (110, 7)
+        assert [p["step"] for p in result["predictions"]] == [0, 16, 32, 48, 64, 80, 96]
+        assert sum(p["phase"] == "both" for p in result["predictions"]) == (2 if strategy == "C" else 0)
+        assert sum(p["phase"] == "copy" for p in result["predictions"]) == (1 if strategy == "B" else 0)
+        hashes.append(
+            (
+                result["initial_state_sha256"],
+                result["pre_recovery_sim_sha256"],
+                result["pre_recovery_actions_sha256"],
+            )
+        )
+    assert hashes[0] == hashes[1] == hashes[2]
+    levels = []
+    for scale in (1, 2, 4):
+        result, arrays = rollout(
+            FakeEnv(300),
+            np.zeros(8),
+            SimpleNamespace(language="task"),
+            0,
+            adapter,
+            FakePolicy(),
+            reference,
+            strategy="C",
+            trigger=60,
+            seed=5000,
+            max_steps=110,
+            reference_task_id=7,
+            perturb_scale=scale,
+        )
+        levels.append(result)
+        assert result["perturbation_applied_steps"] == 4
+        assert [p["step"] for p in result["predictions"] if p["phase"] == "both"] == [64, 80]
+    assert len({r["pre_perturb_sim_sha256"] for r in levels}) == 1
+    assert len({r["pre_perturb_actions_sha256"] for r in levels}) == 1
+    assert len({r["pre_perturb_ee_sha256"] for r in levels}) == 1
+    np.testing.assert_array_equal(
+        levels[2]["perturbation_target_m"], np.array(levels[0]["perturbation_target_m"]) * 4
+    )
+    assert any(p["clipped"] for p in levels[2]["perturbation_commands"])

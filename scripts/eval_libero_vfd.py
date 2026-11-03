@@ -355,10 +355,16 @@ def plot_run(run_path, calibration=None, normalize=False, skip_existing=False):
                     axis.axhline(threshold / divisor, linestyle="--", color="black", label="calibrated threshold")
                 if first is not None:
                     axis.axvline(first, linestyle=":", color="tab:red", label=f"first alarm: {first}")
+                is_demo = metadata.get("episode_kind") == "expert_demonstration"
+                identity_label = (
+                    f"demo {metadata['dataset_episode_index']} (assumed successful)"
+                    if is_demo
+                    else f"initial state {metadata['initial_state_index']}: {label}"
+                )
                 axis.set(
-                    xlabel="Action-generation step",
+                    xlabel="Demonstration frame" if is_demo else "Action-generation step",
                     ylabel="VFD / threshold" if divisor != 1 else "VFD score",
-                    title=f"{metadata['suite']} task {metadata['task_id']}, initial state {metadata['initial_state_index']}: {label}",
+                    title=f"{metadata['suite']} task {metadata['task_id']}, {identity_label}",
                 )
                 axis.grid(alpha=0.2)
                 axis.legend()
@@ -437,6 +443,48 @@ def main():
     command.add_argument("--calibration", type=Path)
     command.add_argument("--output-dir", type=Path, required=True)
     command.add_argument("--dry-run", action="store_true")
+    command = commands.add_parser(
+        "score-dataset", help="score saved successful demos and fit a threshold; no simulator"
+    )
+    command.add_argument("--actor", type=Path, required=True)
+    command.add_argument("--scorer", type=Path, required=True)
+    command.add_argument("--dataset-root", type=Path, default=REPO / "demo_data/libero_loso_clean")
+    command.add_argument("--suites", nargs="+", choices=[*SUITES, *LIMITS], required=True)
+    command.add_argument(
+        "--task-map", type=Path, help="LIBERO literal task-map file; read without importing LIBERO"
+    )
+    command.add_argument("--task-ids", default="all", help="official LIBERO task IDs, not dataset-local IDs")
+    command.add_argument("--episodes-per-task", type=int, default=2, help="0 means all episodes per task")
+    command.add_argument(
+        "--episode-start", type=int, default=0, help="offset within each task's shuffled episode list"
+    )
+    command.add_argument("--selection-seed", type=int, default=0)
+    command.add_argument("--seed", type=int, default=0)
+    command.add_argument("--uncertainty-seed", type=int, default=1234)
+    command.add_argument("--denoising-steps", type=int, default=8)
+    command.add_argument("--num-action-samples", type=int, default=1)
+    command.add_argument("--flow-times")
+    command.add_argument("--data-config", default=DATA_CONFIG)
+    command.add_argument("--gpu-memory-limit-gb", type=float, default=0)
+    command.add_argument(
+        "--max-frames", type=int, help="short smoke test only; cannot fit a calibration threshold"
+    )
+    command.add_argument(
+        "--verify-actor", action="store_true", help="compare first demo action chunk with original inference"
+    )
+    command.add_argument(
+        "--assume-successful-demos",
+        action="store_true",
+        help="assert input episodes are successful expert demos; no policy outcome is inferred",
+    )
+    command.add_argument(
+        "--score-only", action="store_true", help="save scores without automatically fitting threshold.json"
+    )
+    command.add_argument("--scope", choices=["global", "task"], default="global")
+    command.add_argument("--quantile", type=float, default=0.9)
+    command.add_argument("--min-successes", type=int, default=20)
+    command.add_argument("--output-dir", type=Path, required=True)
+    command.add_argument("--dry-run", action="store_true")
     command = commands.add_parser("calibrate", help="fit threshold from complete successful calibration rollouts")
     command.add_argument("--inputs", nargs="+", type=Path, required=True)
     command.add_argument("--output", type=Path, required=True)
@@ -464,6 +512,10 @@ def main():
                 manifest["error"] = f"{type(exc).__name__}: {exc}"
                 save_json(path, manifest)
             raise
+    elif args.command == "score-dataset":
+        from scripts.libero_vfd_dataset import score_dataset
+
+        score_dataset(args)
     elif args.command == "calibrate":
         result = calibrate(args.inputs, args.output, args.quantile, args.min_successes, args.scope)
         print(json.dumps(result["thresholds"], indent=2))

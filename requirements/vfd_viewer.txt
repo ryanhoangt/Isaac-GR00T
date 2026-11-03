@@ -1,0 +1,5 @@
+# CPU-only viewer. Keep separate from the training environment.
+streamlit>=1.51,<2
+numpy>=1.26,<3
+av>=12,<17
+pillow>=10,<13

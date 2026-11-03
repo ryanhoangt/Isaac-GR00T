@@ -64,18 +64,88 @@ def main():
     evaluate.add_argument("--mode", choices=["vanilla", "language", "goal", "both"], default="language")
     evaluate.add_argument("--strategy", choices=["standard", "A", "B", "C"], default="standard")
     evaluate.add_argument("--trigger", type=int, choices=[25, 60])
+    evaluate.add_argument(
+        "--perturb-scale",
+        type=float,
+        default=1.0,
+        help="Multiply the same seeded disturbance vector; duration stays four actions",
+    )
     evaluate.add_argument("--task-ids", type=int, nargs="+", default=list(range(10)))
     evaluate.add_argument("--trials", type=int, default=20)
     evaluate.add_argument("--initial-start", type=int, default=0)
     evaluate.add_argument("--max-steps", type=int, default=1000)
     evaluate.add_argument("--seed", type=int, default=0)
     evaluate.add_argument("--save-video", action="store_true")
+    evaluate.add_argument("--video-trials", type=int, help="Save video for the first N initials per task")
+    evaluate.add_argument("--resume", action="store_true", help="Continue matching completed episodes in --output")
     evaluate.add_argument("--libero-repo", type=Path, default=Path(__file__).resolve().parents[4] / "LIBERO")
     report = commands.add_parser("report", help="CSV/Markdown tables and diagnostic PNG plots")
     report.add_argument("--inputs", type=Path, nargs="+", default=[])
     report.add_argument("--sensitivity", type=Path)
     report.add_argument("--output", type=Path, required=True)
     report.add_argument("--allow-smoke", action="store_true")
+    report.add_argument("--resume", action="store_true", help="Regenerate a partial report in the same directory")
+    screen = commands.add_parser("screen", help="Index, sensitivity, four standard modes and summary")
+    screen.add_argument("--training-root", type=Path, default=Path("outputs/pilot2/run_2k_20261026"))
+    screen.add_argument("--checkpoint-step", type=int, default=5000)
+    screen.add_argument("--split", type=Path, default=Path("demo_data/pilot2_long/split.json"))
+    screen.add_argument("--output", type=Path, required=True)
+    screen.add_argument("--stride", type=int, default=1)
+    screen.add_argument("--states", type=int, default=1000)
+    screen.add_argument("--task-ids", type=int, nargs="+", default=list(range(10)))
+    screen.add_argument("--trials", type=int, default=5)
+    screen.add_argument("--initial-start", type=int, default=0)
+    screen.add_argument("--max-steps", type=int, default=1000)
+    screen.add_argument("--seed", type=int, default=0)
+    screen.add_argument("--video-trials", type=int, default=1)
+    screen.add_argument("--libero-repo", type=Path, default=Path(__file__).resolve().parents[4] / "LIBERO")
+    screen.add_argument("--wandb-mode", choices=["online", "offline", "disabled"], default="online")
+    screen.add_argument("--wandb-entity", default=os.environ.get("WANDB_ENTITY"))
+    screen.add_argument("--dry-run", action="store_true")
+    screen.add_argument("--resume", action="store_true")
+    screen.add_argument("--smoke", action="store_true", help="One task/initial, stride 64, four probes, 80 steps")
+    screen.add_argument("--recovery", action="store_true", help="Also run paired A/B/C at triggers 25 and 60")
+    screen.add_argument(
+        "--reuse-screen", type=Path, help="Reuse a matching screen's index, sensitivity and language-only runs"
+    )
+    recover = commands.add_parser(
+        "recover", help="Paired perturb-and-recover A/B/C using an existing reference index"
+    )
+    recover.add_argument(
+        "--checkpoint", type=Path, default=Path("outputs/pilot2/run_2k_20261026/dual/checkpoint-5000")
+    )
+    recover.add_argument("--index", type=Path, default=Path("outputs/pilot2/screen_5k_taskfix/reference.npz"))
+    recover.add_argument("--split", type=Path, default=Path("demo_data/pilot2_long/split.json"))
+    recover.add_argument("--output", type=Path, required=True)
+    recover.add_argument("--device", default="cuda")
+    recover.add_argument("--task-ids", type=int, nargs="+", default=list(range(10)))
+    recover.add_argument("--triggers", type=int, nargs="+", choices=[25, 60], default=[25, 60])
+    recover.add_argument("--trials", type=int, default=20)
+    recover.add_argument("--initial-start", type=int, default=5)
+    recover.add_argument("--max-steps", type=int, default=1000)
+    recover.add_argument("--seed", type=int, default=0)
+    recover.add_argument(
+        "--perturb-scale",
+        type=float,
+        default=1.0,
+        help="1x: 5..8 cm; 2x: 10..16 cm; 4x: 20..32 cm requested command offset",
+    )
+    recover.add_argument("--video-trials", type=int, default=1)
+    recover.add_argument("--libero-repo", type=Path, default=Path(__file__).resolve().parents[4] / "LIBERO")
+    recover.add_argument("--wandb-mode", choices=["online", "offline", "disabled"], default="online")
+    recover.add_argument("--wandb-entity", default=os.environ.get("WANDB_ENTITY"))
+    recover.add_argument("--dry-run", action="store_true")
+    recover.add_argument("--resume", action="store_true")
+    recover.add_argument(
+        "--smoke", action="store_true", help="Two tasks, one initial, 110 actions for each A/B/C and trigger"
+    )
+    recovery_report = commands.add_parser(
+        "recovery-report", help="Audit paired interventions and plot common-cohort contraction"
+    )
+    recovery_report.add_argument("--inputs", type=Path, nargs="+", required=True)
+    recovery_report.add_argument("--output", type=Path, required=True)
+    recovery_report.add_argument("--allow-smoke", action="store_true")
+    recovery_report.add_argument("--resume", action="store_true")
     args = parser.parse_args()
     for key in (
         "steps",
@@ -89,6 +159,7 @@ def main():
         "save_steps",
         "logging_steps",
         "reference_per_task",
+        "checkpoint_step",
     ):
         if hasattr(args, key) and getattr(args, key) < 1:
             parser.error(f"--{key.replace('_', '-')} must be positive")
@@ -156,7 +227,19 @@ def main():
     elif args.command == "report":
         from .diagnostics import summarize
 
-        summarize(args.inputs, args.output, args.sensitivity, args.allow_smoke)
+        summarize(args.inputs, args.output, args.sensitivity, args.allow_smoke, args.resume)
+    elif args.command == "screen":
+        from .screen import screen
+
+        screen(args)
+    elif args.command == "recover":
+        from .recovery import recover
+
+        recover(args)
+    elif args.command == "recovery-report":
+        from .recovery_report import summarize_recovery
+
+        summarize_recovery(args.inputs, args.output, args.allow_smoke, args.resume)
 
 
 if __name__ == "__main__":

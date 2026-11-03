@@ -37,6 +37,7 @@ pip-wheel-metadata/
 .python-version
 .idea
 .venv/
+.venv-vfd-viewer/
 .vscode/
 /*.iml
 pyrightconfig.json

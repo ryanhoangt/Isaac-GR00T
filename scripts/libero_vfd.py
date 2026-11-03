@@ -197,6 +197,8 @@ class SnapshotVFDPolicy:
 
 
 def rollout_id(metadata):
+    if metadata.get("episode_kind") == "expert_demonstration":
+        return f"dataset/{metadata['dataset_episode_id']}"
     # Different simulator/noise seeds with the same official initial state are
     # conservatively treated as overlapping calibration/test configurations.
     return f"{metadata['suite']}/task{metadata['task_id']:02d}/init{metadata['initial_state_index']:03d}"
@@ -226,12 +228,13 @@ def calibrate(run_paths, output, quantile=0.9, min_successes=20, scope="task"):
     """
     if not 0 < quantile < 1 or min_successes < 2 or scope not in ("task", "global"):
         raise ValueError("invalid calibration quantile/count/scope")
-    groups, ids, signatures, suites = {}, set(), [], set()
+    groups, ids, signatures, suites, kinds = {}, set(), [], set(), set()
     for path in run_paths:
         manifest, episodes = load_run(path)
         if manifest.get("smoke_only"):
             raise ValueError("truncated smoke rollouts cannot calibrate a deployment detector")
         signatures.append(manifest["score_signature"])
+        kinds.add(manifest.get("data_kind", "policy_rollout"))
         for _, metadata, scores in episodes:
             identity = rollout_id(metadata)
             if identity in ids:
@@ -244,6 +247,8 @@ def calibrate(run_paths, output, quantile=0.9, min_successes=20, scope="task"):
                 groups[key].append(float(np.max(scores)))
     if not signatures or not groups or any(s != signatures[0] for s in signatures):
         raise ValueError("calibration runs must use one identical actor/scorer/score configuration")
+    if len(kinds) != 1:
+        raise ValueError("do not mix expert demonstrations and policy rollouts in one calibration")
     thresholds = {}
     for key, values in groups.items():
         if len(values) < min_successes:
@@ -257,6 +262,10 @@ def calibrate(run_paths, output, quantile=0.9, min_successes=20, scope="task"):
         "calibration_ids": sorted(ids),
         "calibration_suites": sorted(suites),
         "source_runs": [str(Path(p).resolve()) for p in run_paths],
+        "calibration_data_kind": next(iter(kinds)),
+        "official_initial_state_overlap": "unknown for demonstrations; dataset IDs do not identify official initial states"
+        if kinds == {"expert_demonstration"}
+        else "checked by official initial-state identity",
         "note": "Target-suite calibration uses held-out data. Source-only global thresholds have no target coverage guarantee.",
     }
     output = Path(output)

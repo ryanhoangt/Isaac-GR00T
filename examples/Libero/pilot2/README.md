@@ -139,14 +139,104 @@ because it records the split and matched training recipe.
 
 ## GPU evaluation
 
+Simulator task indices and converted dataset task IDs have different orders.
+Evaluation matches their instruction strings before retrieval and records both
+IDs in every rollout. Never use the simulator list position as a reference
+dataset task ID. Reports reject goal/recovery runs without this provenance.
+
 The evaluation Python must contain GR00T plus LIBERO's simulator dependencies.
 `--libero-repo` defaults to `../LIBERO`. A config pointing at that checkout is
 created inside each evaluation run; the user's home LIBERO config is untouched.
 The default renderer is EGL on CUDA. An explicitly set `MUJOCO_GL` is respected.
 
+The recommended first pass uses the matched **checkpoint-5000** pair from the
+completed training run. It builds a frozen Eagle feature index from the 30
+held-out reference demonstrations, then retrieves the nearest frame within the
+current task and uses its frame `+16` as the goal. The index is a cache for
+nearest-neighbor lookup during rollouts; it does not train or update the model.
+
 ```bash
-BASELINE=outputs/pilot2/run_2k_20261026/baseline/checkpoint-2000
-DUAL=outputs/pilot2/run_2k_20261026/dual/checkpoint-2000
+# Inspect the plan without loading a model or writing output.
+bash scripts/eval_pilot2.sh outputs/pilot2/screen_5k --dry-run
+
+# Screening: 10 tasks × 5 official initial states × 4 standard conditions.
+bash scripts/eval_pilot2.sh outputs/pilot2/screen_5k \
+  --wandb-entity ryan-nlp
+
+# Continue the same plan after interruption; completed episodes are skipped.
+bash scripts/eval_pilot2.sh outputs/pilot2/screen_5k \
+  --wandb-entity ryan-nlp --resume
+```
+
+The first `screen_5k` run was audited and its goal-only/both conditions used
+incorrect reference task IDs. Its baseline, dual language-only, index and
+sensitivity diagnostic remain reusable. Run only the two corrected goal
+conditions, retaining the completed valid stages, with:
+
+```bash
+bash scripts/eval_pilot2.sh outputs/pilot2/screen_5k_taskfix \
+  --reuse-screen outputs/pilot2/screen_5k --wandb-entity ryan-nlp
+```
+
+This creates a new output directory, links the four reusable stages and runs
+goal-only/both again with instruction-based task matching. Use the same command
+with `--resume` if interrupted. The original rollout files remain available for
+auditing. Training and the frozen feature index do not need to be rerun.
+
+This runs index (stride 1), 1,000 shared-noise goal/null/distractor probes,
+baseline vanilla, dual language-only, dual goal-only, dual language+goal, and a
+CSV/Markdown/PNG report. Each rollout has the full 1,000-action budget; the
+first trial per task/condition is saved as video. Results and stage logs go
+under the new screen output directory. Evaluation metrics also go to the fixed
+W&B project `icl-vla-uncertainty`. `--wandb-mode disabled` keeps evaluation
+local. The command does not launch the perturb-and-recover study; run that
+after inspecting the screening results. For a short pipeline check, use
+`--smoke`: task 0, one initial state, 80 steps, sparse stride-64 index and four
+sensitivity states. Its report is labelled diagnostic, not a task success
+estimate.
+
+For a fresh run that also includes all six paired perturbation conditions and
+logs their recovery/contraction metrics to the same W&B project, use a **new**
+output directory:
+
+```bash
+bash scripts/eval_pilot2.sh outputs/pilot2/full_eval_5k \
+  --recovery --wandb-entity ryan-nlp
+```
+
+This runs 10 conditions × 10 tasks × 5 initials = 500 rollouts. The
+`--recovery --smoke` form uses a 110-step budget so the trigger-60 recovery
+window can finish. The shorter screening run above is useful before spending
+GPU time on the full protocol.
+
+For a standalone perturb-and-recover run using the full stride-1 index:
+
+```bash
+DUAL=outputs/pilot2/run_2k_20261026/dual/checkpoint-5000
+INDEX=outputs/pilot2/screen_5k/reference.npz
+for trigger in 25 60; do
+  for strategy in A B C; do
+    "$PYTHON" -m examples.Libero.pilot2 evaluate \
+      --checkpoint "$DUAL" --index "$INDEX" --strategy "$strategy" \
+      --trigger "$trigger" --task-ids 0 1 2 3 4 5 6 7 8 9 \
+      --trials 5 --initial-start 0 --max-steps 1000 \
+      --output "outputs/pilot2/recovery_5k_${strategy}_t${trigger}"
+  done
+done
+```
+
+Each recovery run has the same seeds, official initial states and dual-model
+language-only prefix. Use `--resume` on an interrupted individual evaluation.
+Once six recovery runs complete, call `report` with the four screen condition
+directories and six recovery directories as `--inputs`, the screen
+`sensitivity.csv`, and a new report output directory. The original screen
+report remains the four-mode comparison.
+
+The lower-level commands remain available for custom experiments:
+
+```bash
+BASELINE=outputs/pilot2/run_2k_20261026/baseline/checkpoint-5000
+DUAL=outputs/pilot2/run_2k_20261026/dual/checkpoint-5000
 INDEX=outputs/pilot2/reference.npz
 
 "$PYTHON" -m examples.Libero.pilot2 index \
@@ -190,9 +280,115 @@ are **not labelled provably unseen**. `--initial-start` selects a disjoint
 official-state range when needed. `--task-ids 0 --trials 1 --max-steps 80` is a
 smoke run and is excluded from scientific reports unless `--allow-smoke` is used.
 
+## Recovery-only evaluation at scale
+
+Use the dedicated runner after screening. It uses the existing dual checkpoint
+and stride-1 reference index and executes only A/B/C at triggers 25 and 60.
+Instruction-based task matching is applied to retrieval and EE reference
+distances. All three strategies use the same dual checkpoint and language-only
+policy before the disturbance.
+
+```bash
+# CPU preflight and exact command plan; no output/model/W&B initialization.
+bash scripts/eval_pilot2_recovery.sh outputs/pilot2/recovery_5k_20trials \
+  --wandb-entity ryan-nlp --dry-run
+
+# Recommended large run: 10 tasks × 20 initials × 2 triggers × 3 strategies.
+bash scripts/eval_pilot2_recovery.sh outputs/pilot2/recovery_5k_20trials \
+  --wandb-entity ryan-nlp
+
+# Continue the same run after Ctrl+C or allocation expiration.
+bash scripts/eval_pilot2_recovery.sh outputs/pilot2/recovery_5k_20trials \
+  --wandb-entity ryan-nlp --resume
+```
+
+Defaults: checkpoint-5000, 1,000 executed actions/rollout, four Euler steps,
+full 16-action chunks, seed 0, and official initial-state indices **5..24**.
+Those indices were reserved from screening (0..4); exclusion from training
+demonstrations is still unverified. There are **1,200 rollouts**, running
+sequentially on the current GPU. A 50-trial/task study uses
+`--trials 50 --initial-start 0` and a new output directory (3,000 rollouts),
+including the previously screened official states.
+
+For debugging, `--smoke` selects tasks 0 and 4, initial index 5 and a 110-action
+budget, giving 12 short rollouts across both triggers and all strategies. The
+report marks these as diagnostics. `--triggers 25` runs one trigger only.
+
+The launcher logs episode progress, per-condition recovery rates, paired
+success differences and plots to the fixed W&B project
+`icl-vla-uncertainty`. `--wandb-mode disabled` runs locally. Weights and videos
+stay local. Each episode saves JSON and NPZ arrays containing EE positions,
+reference distances, nominal action commands and issued action commands.
+By default the first initial per task/condition gets an MP4 (**60 videos** for
+the large run); use `--video-trials 0` before starting a new run to disable
+videos. Runtime input hashes prevent resuming with a changed checkpoint recipe,
+index, seed, task set or rollout budget. A file lock prevents two launchers
+from writing the same output directory.
+
+Outputs under `<output>/report/` include:
+
+- `summary.csv` / `summary.md`: task and predicate completion, conditional
+  recovery rates, model latency, available-case contraction with counts.
+- `paired_trials.csv` / `paired_comparisons.csv`: matched A/B/C outcomes,
+  improvements and regressions on identical eligible trials.
+- `paired_contraction.csv` / `paired_contraction.png`: a common cohort that
+  has all four distance observations across all three strategies. This avoids
+  changing trial composition along the curve, but excludes episodes ending
+  before +32, including early successes. Raw distances remain in the summary.
+- `latency_by_phase.csv`: separates model inference, retrieval and their
+  serial sum; expert-copy chunks have no model inference.
+- `pairing_audit.json`: checks identical initial states, disturbance targets
+  and applied commands, pre-recovery EE trajectory, simulator state (robot and
+  objects), and issued commands. B and C must retrieve the same milestone
+  from the same recovery state. A mismatch stops the comparison.
+- `recovery_success.png`: A/B/C completion rates after full perturbation.
+
+An episode finishing before all four disturbance actions is excluded from the
+recovery denominator and counted separately. The requested 5..8 cm Cartesian
+offset is converted to OSC input units and clipped against actual controller
+limits. Per-action clipping and the added command-equivalent displacement are
+logged. Observed EE displacement includes the nominal policy movement and
+contacts; it is not a measurement of disturbance-only causal displacement.
+Global nearest-reference EE contraction is descriptive and does not establish
+functional object alignment or a Lyapunov guarantee. The sensitivity diagnostic
+from screening remains a separate model-grounding measurement.
+
 ## Exact recovery semantics
 
-- Perturb actions at t=25..28 or t=60..63. The sampled target Cartesian offset
+### Perturbation severity: matched 1x / 2x / 4x runs
+
+`recover` and `evaluate` accept `--perturb-scale` (default 1). The original
+seeded 5..8 cm command-offset vector is sampled first and then multiplied by
+the scale. Keep `--seed`, task set, official initial range, triggers and four
+perturbation actions fixed. This changes magnitude while preserving direction
+and the pre-disturbance policy trajectory. Base vectors and pre-disturbance
+EE/action/simulator hashes are stored in new episodes for matching across levels.
+Existing 1x outputs/settings remain compatible with the updated runner.
+
+```bash
+# Separate pilot runs; run sequentially on one GPU.
+bash scripts/eval_pilot2_recovery.sh outputs/pilot2/recovery_5k_5trials_2x \
+  --trials 5 --perturb-scale 2 --wandb-entity ryan-nlp
+bash scripts/eval_pilot2_recovery.sh outputs/pilot2/recovery_5k_5trials_4x \
+  --trials 5 --perturb-scale 4 --wandb-entity ryan-nlp
+```
+
+Each command runs 300 rollouts, with the same initials 5..9 as the original
+1x pilot. A requested 2x offset has norm 10..16 cm; 4x has norm 20..32 cm.
+These are summed command offsets over four actions, **not guaranteed physical
+EE displacements**. Controller clipping can reduce the delivered offset and
+alter its direction, especially at 4x. The duration and recovery windows remain
+unchanged. Do not increase duration as part of this amplitude comparison.
+
+W&B run names/config identify the scale. `disturbance_delivery.csv` records
+requested norm, delivered command-equivalent norm, projection onto the requested
+direction, clipping counts and observed EE motion. Compare recovery success
+against both requested severity and delivered severity; observed EE motion also
+contains nominal policy motion and contact response. Reports refuse to mix
+severity levels within an A/B/C comparison. To resume a 2x/4x run, repeat its
+command with the same `--perturb-scale` and append `--resume`.
+
+- At default 1x, perturb actions at t=25..28 or t=60..63. The sampled target Cartesian offset
   has components in +/-7cm and norm 5..8cm. Divide it over four actions and
   convert meters using the actual OSC controller input/output scales. Controller
   clipping and contacts mean the measured displacement can differ; both the

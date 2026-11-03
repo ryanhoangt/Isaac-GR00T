@@ -82,15 +82,21 @@ def build_index(reference, split, feature_encoder, output, stride=1, encoder_id=
                 positions.append(np.asarray(data["observation.state"].iloc[step])[:3])
         if decoded < len(data):
             raise ValueError(f"Truncated reference video: {path}")
+        print(
+            f"Indexed reference episode {episode}: {decoded} frames ({len(features)} features total)", flush=True
+        )
     output.parent.mkdir(parents=True, exist_ok=True)
-    np.savez_compressed(
-        output,
-        features=np.stack(features),
-        episodes=episodes,
-        frames=frames,
-        tasks=tasks,
-        positions=np.stack(positions),
-    )
+    temporary = output.with_suffix(".npz.tmp")
+    with temporary.open("wb") as stream:
+        np.savez_compressed(
+            stream,
+            features=np.stack(features),
+            episodes=episodes,
+            frames=frames,
+            tasks=tasks,
+            positions=np.stack(positions),
+        )
+    temporary.replace(output)
     signature = {
         "split_id": manifest["split_id"],
         "reference": str(reference),
@@ -99,7 +105,10 @@ def build_index(reference, split, feature_encoder, output, stride=1, encoder_id=
         "feature_type": "pooled_frozen_eagle_visual_tokens",
         "frames": len(frames),
     }
-    output.with_suffix(".json").write_text(json.dumps(signature, indent=2) + "\n")
+    sidecar = output.with_suffix(".json")
+    temporary = sidecar.with_suffix(".json.tmp")
+    temporary.write_text(json.dumps(signature, indent=2) + "\n")
+    temporary.replace(sidecar)
     return signature
 
 
@@ -172,13 +181,17 @@ def action_matrix(action):
     return result.astype(np.float32)
 
 
-def sample_disturbance(rng):
+def sample_disturbance(rng, scale=1.0):
     # Enforce both constraints in the specification: components <= 7cm and
     # Euclidean target offset between 5 and 8cm.
+    if not np.isfinite(scale) or scale <= 0:
+        raise ValueError("Perturbation scale must be finite and positive")
     while True:
         value = rng.uniform(-0.07, 0.07, size=3)
         if 0.05 <= np.linalg.norm(value) <= 0.08:
-            return value
+            # Sample the same base vector at every level, then scale it. This
+            # preserves both direction and RNG consumption for paired trials.
+            return value * scale
 
 
 def disturbed_command(action, offset_m, controller, steps=4):

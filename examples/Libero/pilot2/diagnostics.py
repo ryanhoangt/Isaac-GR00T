@@ -82,10 +82,12 @@ def sensitivity(args):
         if sample_id % 20 == 0:
             print(f"Sensitivity: {sample_id + 1}/{count}", flush=True)
     output.parent.mkdir(parents=True, exist_ok=True)
-    with output.open("w", newline="") as stream:
+    temporary = output.with_suffix(output.suffix + ".tmp")
+    with temporary.open("w", newline="") as stream:
         writer = csv.DictWriter(stream, fieldnames=list(rows[0]))
         writer.writeheader()
         writer.writerows(rows)
+    temporary.replace(output)
     metadata = {
         "split_id": split["split_id"],
         "states": count,
@@ -96,17 +98,21 @@ def sensitivity(args):
         "latency": "synchronized end-to-end get_action, excludes retrieval; one warmup per mode",
         "interpretation": "sensitivity is evidence of dependence, not proof that the goal is correct",
     }
-    output.with_suffix(".json").write_text(json.dumps(metadata, indent=2) + "\n")
+    sidecar = output.with_suffix(".json")
+    temporary = sidecar.with_suffix(".json.tmp")
+    temporary.write_text(json.dumps(metadata, indent=2) + "\n")
+    temporary.replace(sidecar)
 
 
-def summarize(inputs, output, sensitivity_csv=None, allow_smoke=False):
+def summarize(inputs, output, sensitivity_csv=None, allow_smoke=False, resume=False):
     import matplotlib
 
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
+    from .task_mapping import validate_retrieval_provenance
 
     output = Path(output)
-    output.mkdir(parents=True, exist_ok=False)
+    output.mkdir(parents=True, exist_ok=resume)
     groups, split_ids, training_signatures, all_episodes = defaultdict(list), set(), set(), []
     for root in map(Path, inputs):
         manifest = json.loads((root / "manifest.json").read_text())
@@ -137,6 +143,7 @@ def summarize(inputs, output, sensitivity_csv=None, allow_smoke=False):
         )
         for name in manifest["episodes"]:
             row = json.loads((root / f"{name}.json").read_text())
+            validate_retrieval_provenance(manifest, row)
             if row["smoke_only"] and not allow_smoke:
                 raise ValueError("Smoke rollouts cannot be included in scientific summaries")
             groups[label].append(row)
@@ -152,6 +159,25 @@ def summarize(inputs, output, sensitivity_csv=None, allow_smoke=False):
             prefixes[row["task_id"], row["initial_state_index"], row["trigger"], row["seed"]].add(prefix)
     if any(len(values) > 1 for values in prefixes.values()):
         raise ValueError("A/B/C have different pre-recovery EE trajectories; investigate before comparing")
+    standard = {
+        name: {(item["task_id"], item["initial_state_index"]) for item in groups[name]}
+        for name in ("vanilla", "language", "goal", "both")
+        if name in groups
+    }
+    if len(standard) > 1 and len({frozenset(ids) for ids in standard.values()}) != 1:
+        raise ValueError("Standard modes must use the same task and initial-state pairs")
+    for trigger in (25, 60):
+        recovery = {
+            name: {(item["task_id"], item["initial_state_index"]) for item in groups[name]}
+            for name in (f"strategy_{strategy}_t{trigger}" for strategy in "ABC")
+            if name in groups
+        }
+        if len(recovery) > 1 and len({frozenset(ids) for ids in recovery.values()}) != 1:
+            raise ValueError(f"A/B/C at trigger {trigger} must use paired task and initial-state trials")
+    if sensitivity_csv and Path(sensitivity_csv).with_suffix(".json").is_file():
+        metadata = json.loads(Path(sensitivity_csv).with_suffix(".json").read_text())
+        if metadata["split_id"] not in split_ids:
+            raise ValueError("Sensitivity probes use a different dataset split")
     records = []
     for label, episodes in sorted(groups.items()):
         ids = [(item["task_id"], item["initial_state_index"]) for item in episodes]
