@@ -1,0 +1,12 @@
+{
+  "status": "passed",
+  "complete_cases": 18,
+  "goal_rollouts_audited": 6,
+  "checks": [
+    "initial states",
+    "simulator starts",
+    "goal image identity",
+    "phase pointer bounds",
+    "artifacts"
+  ]
+}

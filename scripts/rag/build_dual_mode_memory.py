@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import json
 from pathlib import Path
 
+import numpy as np
 import torch
 import tyro
 from tqdm import tqdm
@@ -32,6 +33,7 @@ class Args:
     seed: int = 42
     limit_tasks: int = 0
     resume: bool = False
+    diagnosis: bool = False
 
 
 def save_manifest(directory, manifest):
@@ -87,6 +89,8 @@ def main(args: Args):
         "selection": "first available episode IDs per task",
         "tasks": {},
     }
+    if args.diagnosis:
+        manifest["diagnosis_state"] = True
     if args.resume:
         saved = json.loads((args.output / "manifest.json").read_text())
 
@@ -123,11 +127,14 @@ def main(args: Args):
                     raise ValueError("Cached memory provenance differs")
                 continue
             chunks = {key: [] for key in ("keys", "action", "backbone_features", "backbone_attention_mask")}
+            if args.diagnosis:
+                chunks.update({key: [] for key in ("state", "embodiment_id", "ee_position")})
             for start in range(0, len(coordinates), args.batch_size):
-                samples = [
-                    transforms(dataset.get_step_data(ep, frame))
+                raw_samples = [
+                    dataset.get_step_data(ep, frame)
                     for ep, frame, _ in coordinates[start : start + args.batch_size]
                 ]
+                samples = [transforms(sample.copy()) for sample in raw_samples]
                 batch = collator(samples)
                 if any(value != task for value in batch.pop("tasks")):
                     raise ValueError("Task identity differs between dataset and collator")
@@ -136,6 +143,14 @@ def main(args: Args):
                 chunks["action"].append(batch["action"].cpu())
                 chunks["backbone_features"].append(visual.backbone_features.cpu())
                 chunks["backbone_attention_mask"].append(visual.backbone_attention_mask.cpu())
+                if args.diagnosis:
+                    chunks["state"].append(batch["state"].cpu())
+                    chunks["embodiment_id"].append(batch["embodiment_id"].cpu())
+                    xyz = [
+                        [float(np.asarray(sample[f"state.{key}"]).reshape(-1)[0]) for key in ("x", "y", "z")]
+                        for sample in raw_samples
+                    ]
+                    chunks["ee_position"].append(torch.tensor(xyz, dtype=torch.float32))
             entry = {key: torch.cat(values) for key, values in chunks.items()}
             entry.update(
                 episode_id=torch.tensor([v[0] for v in coordinates]),
@@ -146,6 +161,12 @@ def main(args: Args):
             torch.save(entry, args.output / f".{filename}.tmp")
             (args.output / f".{filename}.tmp").rename(args.output / filename)
             manifest["tasks"][task] = {"file": filename, "episode_ids": ids, "frames": len(coordinates)}
+            if args.diagnosis:
+                ee_file = f"task-{task_index:02d}_ee.npy"
+                with (args.output / f".{ee_file}.tmp").open("wb") as handle:
+                    np.save(handle, entry["ee_position"].numpy(), allow_pickle=False)
+                (args.output / f".{ee_file}.tmp").rename(args.output / ee_file)
+                manifest["tasks"][task]["ee_file"] = ee_file
             save_manifest(args.output, manifest)
     manifest["status"] = "completed"
     save_manifest(args.output, manifest)

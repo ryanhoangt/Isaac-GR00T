@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 import json
+import os
 from pathlib import Path
 
 import torch
@@ -27,6 +28,7 @@ class Args:
     port: int = 8085
     host: str = "127.0.0.1"
     seed: int = 0
+    server_id: str | None = None
 
 
 def load_policy(args):
@@ -42,7 +44,12 @@ def load_policy(args):
     dual = saved_config["action_head_cfg"].get("dual_mode", False)
     if args.mode and not dual:
         raise ValueError("Goal mode requires a checkpoint trained with dual-mode conditioning")
-    model_cls = DualModeRAVLA if dual else RAVLA
+    if saved_config["action_head_cfg"].get("isolated_goal_branch", False):
+        from gr00t.rag.goal_control import GoalControlRAVLA
+
+        model_cls = GoalControlRAVLA
+    else:
+        model_cls = DualModeRAVLA if dual else RAVLA
     model = model_cls.from_pretrained(
         args.checkpoint, torch_dtype=torch.bfloat16, device_map="cuda:0", tune_llm=False, tune_visual=False
     ).eval()
@@ -67,8 +74,17 @@ def load_policy(args):
 
 def main(args):
     policy = load_policy(args)
+    from gr00t.rag.dual_mode_diagnosis import DiagnosticPolicy
+
+    diagnosis = DiagnosticPolicy(policy)
     server = RobotInferenceServer(policy, args.host, args.port)
     server.register_endpoint("get_action_with_context", policy.get_action_with_context)
+    server.register_endpoint("get_action_diagnosis", diagnosis.predict)
+    server.register_endpoint(
+        "server_info",
+        lambda: {"server_id": args.server_id, "pid": os.getpid(), "checkpoint": str(args.checkpoint.resolve())},
+        requires_input=False,
+    )
     server.run()
 
 

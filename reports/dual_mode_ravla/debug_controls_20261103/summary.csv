@@ -1,0 +1,6 @@
+model,episodes,successes,success_pct,official_initial_state_matches,initial_retrieval_matches,max_initial_ee_difference_m,mean_final_predicate_completion_pct
+RA-VLA local,50,7,14,50,50,0.0,29.333333333333332
+Action-only control 5k,50,9,18,50,50,0.0,31.333333333333336
+"Dual 5k, action eval",50,3,6,50,50,0.0,17.666666666666664
+Action-only control 15k,50,8,16,50,50,0.0,28.666666666666664
+"Dual 15k, action eval",50,1,2,50,50,0.0,17.333333333333336

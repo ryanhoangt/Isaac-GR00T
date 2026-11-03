@@ -4,6 +4,60 @@ Streamlit app for the offline caches described in [PRECOMPUTE_RETRIEVAL.md](PREC
 It runs on CPU and uses the existing MP4s and task memory. No policy server,
 model checkpoint loading or simulator is needed.
 
+## Dual-mode rollout debugger
+
+The same app now includes **Dual-mode rollouts**, reading `outputs/ravla_eval`
+directly. This view uses the **historical context recorded during inference**,
+rather than retrieval recomputed from compressed videos. It supports the local
+RA-VLA baseline, dual action-only checkpoints, and adaptive q90/q95 rollouts.
+
+Run on a CPU worker (no GPU needed):
+
+```bash
+salloc --ntasks=1 --cpus-per-task=1 --mem=4G --time=02:00:00
+cd /mnt/data/vhoangth2/repos/Isaac-GR00T-RA-VLA
+srun --ntasks=1 --cpus-per-task=1 --cpu-bind=none \
+  bash scripts/visualize_ravla_retrieval.sh --server.port 8502 -- \
+  --view dual --eval-root outputs/ravla_eval
+```
+
+Forward port **8502 from the worker running the app**, using the same SSH tunnel
+workflow as below. The app binds to `127.0.0.1`. Open `http://localhost:8502` after
+forwarding. `--eval-root` also accepts one evaluation-run directory. The sidebar
+**Viewer** switch returns to the original offline retrieval-cache view.
+
+Choose run, condition, task and initial state, then move the recorded-query slider
+or use **Next mode switch**. Four panels show:
+
+1. Current rollout observation at that exact control step.
+2. Current nearest reference frame.
+3. Active anchor, which can stay pinned while nearest changes.
+4. Active Mode-2 goal, or an explicitly inactive candidate goal in Mode 1.
+
+Both cameras, demo/frame IDs, support thresholds, shaded goal-mode intervals,
+normalized predicted/anchor-expert action chunks, and downloadable query traces
+are available. Expert actions shown in goal mode are diagnostic only; the action
+head's expert action tokens are masked in that mode. Only top-1 was recorded;
+this view does not invent historical top-k rankings.
+
+Reference images come from the original dataset videos identified by the memory's
+demo/frame provenance. Task matching uses language, since simulator task IDs and
+dataset memory filenames have different orderings. Changed reference-manifest
+bindings or inconsistent logged indices are rejected.
+
+Current videos are resolved from `<condition>/taskXX_initYYY/rollout.mp4`, including
+published backfills even when historical `episode.json` still has `video: null`.
+Reconstructed videos are labelled and checked against `replay_validation.json`;
+unverified replays are rejected. EE/predicate validation does not establish full
+object-state equality. Missing videos leave the reference panels/timeline usable.
+Click **Refresh rollouts / videos** as backfill progresses.
+
+Validation on CPU worker, November 2, 2026: **8 tests passed** (including legacy
+viewer navigation); real-artifact Streamlit checks passed on all five main run
+directories, covering nine action/goal/pinned-context query cases. Reference seek
+results were compared with sequential decoding of the original AV1 videos.
+[Example frame comparison](../../outputs/retrieval_cache/dual_mode_viewer_validation/real_context_preview.png).
+
 ## Setup and launch
 
 From the repo, create a separate environment that inherits torch/PyAV from the
@@ -91,7 +145,7 @@ app's slider.
 
 ```bash
 .venv-visualizer/bin/python -m pytest -q \
-  tests/test_retrieval_viewer.py tests/test_precompute_retrieval.py
+  tests/test_dual_mode_viewer.py tests/test_retrieval_viewer.py tests/test_precompute_retrieval.py
 ```
 
 Tests cover exact decoded frame selection, camera splitting, inverse image

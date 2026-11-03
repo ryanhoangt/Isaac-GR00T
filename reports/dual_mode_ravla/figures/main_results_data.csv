@@ -1,0 +1,7 @@
+method,index,episodes,successes,success_pct,control_steps,goal_control_steps,goal_step_pct,goal_entries,exit_cap,exit_support,episode_end_in_goal
+RA-VLA (local),0,100,11,11,92281,0,0.0,0,0,0,0
+Dual: action only,1,100,3,3,98953,0,0.0,0,0,0,0
+"Adaptive q90, 2-chunk cap",2,100,1,1,99329,56913,57.29746599683879,1847,1659,126,62
+"Adaptive q95, 2-chunk cap",3,100,1,1,99329,53689,54.05168681855249,1733,1596,70,67
+"Adaptive q90, until q80",4,100,0,0,100000,87008,87.008,227,0,127,100
+"Adaptive q95, until q80",5,100,0,0,100000,82408,82.408,193,0,94,99

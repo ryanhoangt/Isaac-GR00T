@@ -1,0 +1,5 @@
+model,episodes,successes,success_pct
+RA-VLA local,50,7,14
+dual 5k,50,3,6
+dual 10k,50,1,2
+dual 15k,50,1,2

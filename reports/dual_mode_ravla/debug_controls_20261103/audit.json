@@ -1,0 +1,111 @@
+{
+  "status": "passed",
+  "cohort": "10 Long tasks x initial states 0..4",
+  "results": [
+    {
+      "model": "RA-VLA local",
+      "episodes": 50,
+      "successes": 7,
+      "success_pct": 14,
+      "official_initial_state_matches": 50,
+      "initial_retrieval_matches": 50,
+      "max_initial_ee_difference_m": 0.0,
+      "mean_final_predicate_completion_pct": 29.333333333333332
+    },
+    {
+      "model": "Action-only control 5k",
+      "episodes": 50,
+      "successes": 9,
+      "success_pct": 18,
+      "official_initial_state_matches": 50,
+      "initial_retrieval_matches": 50,
+      "max_initial_ee_difference_m": 0.0,
+      "mean_final_predicate_completion_pct": 31.333333333333336
+    },
+    {
+      "model": "Dual 5k, action eval",
+      "episodes": 50,
+      "successes": 3,
+      "success_pct": 6,
+      "official_initial_state_matches": 50,
+      "initial_retrieval_matches": 50,
+      "max_initial_ee_difference_m": 0.0,
+      "mean_final_predicate_completion_pct": 17.666666666666664
+    },
+    {
+      "model": "Action-only control 15k",
+      "episodes": 50,
+      "successes": 8,
+      "success_pct": 16,
+      "official_initial_state_matches": 50,
+      "initial_retrieval_matches": 50,
+      "max_initial_ee_difference_m": 0.0,
+      "mean_final_predicate_completion_pct": 28.666666666666664
+    },
+    {
+      "model": "Dual 15k, action eval",
+      "episodes": 50,
+      "successes": 1,
+      "success_pct": 2,
+      "official_initial_state_matches": 50,
+      "initial_retrieval_matches": 50,
+      "max_initial_ee_difference_m": 0.0,
+      "mean_final_predicate_completion_pct": 17.333333333333336
+    }
+  ],
+  "paired_outcomes": [
+    {
+      "left": "Action-only control 5k",
+      "right": "Dual 5k, action eval",
+      "left_only": 8,
+      "right_only": 2,
+      "both": 1,
+      "neither": 39
+    },
+    {
+      "left": "Action-only control 15k",
+      "right": "Dual 15k, action eval",
+      "left_only": 8,
+      "right_only": 1,
+      "both": 0,
+      "neither": 41
+    },
+    {
+      "left": "Action-only control 5k",
+      "right": "RA-VLA local",
+      "left_only": 6,
+      "right_only": 4,
+      "both": 3,
+      "neither": 37
+    },
+    {
+      "left": "Action-only control 15k",
+      "right": "RA-VLA local",
+      "left_only": 7,
+      "right_only": 6,
+      "both": 1,
+      "neither": 36
+    }
+  ],
+  "matching_training_fields": [
+    "dataset_paths",
+    "retriever",
+    "memory_name",
+    "base_model",
+    "seed",
+    "batch_size",
+    "gradient_accumulation",
+    "num_epochs",
+    "learning_rate",
+    "weight_decay",
+    "margin",
+    "adherence_weight",
+    "lookahead",
+    "negative_gap"
+  ],
+  "caveats": [
+    "One training seed and 50 matched benchmark initial states; no statistical-superiority claim.",
+    "Initial hashes refer to official reset vectors; EE differences after settling are reported separately.",
+    "Joint training also halves expected action-mode sample exposure; gradient interference is not uniquely identified."
+  ]
+}

@@ -66,7 +66,7 @@ srun --ntasks=1 --cpus-per-task=8 env \
   --memory outputs/dual_mode/long_reference --mode 1 --port 8085
 ```
 
-The server exposes the usual `get_action` RPC plus `get_action_with_context` for provenance. It also accepts an original one-mode RA-VLA checkpoint in mode 0, allowing comparison on the same buffer. A simulator client still needs to be run separately; adaptive switching and a new rollout/recovery launcher are not part of this training implementation.
+The server exposes the usual `get_action` RPC plus `get_action_with_context` for provenance. It also accepts an original one-mode RA-VLA checkpoint in mode 0, allowing comparison on the same buffer. The new `get_action_diagnosis` RPC and [diagnosis launcher](DUAL_MODE_DIAGNOSIS.md) support fixed-mode rollouts, goal probes, and scheduled A/B/C recovery. Offline retrieval-support calibration and hysteresis-based adaptive switching are documented in [SUPPORT_GATE_EVAL.md](SUPPORT_GATE_EVAL.md).
 
 ## Validation
 
@@ -80,3 +80,7 @@ Worker allocation 62764, H100 80GB:
 - Smoke reference cache covers one dataset task at stride 64. It is a software artifact, not the full stride-4 evaluation buffer.
 
 Artifacts: `outputs/dual_mode/smoke_batch32_20261030/` and its `checkpoint_check.json`. These checks establish execution, not improved goal grounding or recovery success. Full training/evaluation has not been run by the agent.
+
+## Isolated goal-controller diagnostics
+
+[Goal-control pilot](GOAL_ORACLE_DIAGNOSIS.md) describes the frozen Mode-1 owner and separate trainable goal head. [Observation-only fixed-goal tests](FIXED_GOAL_DIAGNOSIS.md) replay RGB/proprio-validated action prefixes and compare execution horizons without online phase selection. Dynamics-assisted endpoint training is a future proposal and is not implemented in this checkpoint.

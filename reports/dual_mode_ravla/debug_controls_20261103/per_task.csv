@@ -1,0 +1,51 @@
+model,task_id,episodes,successes
+RA-VLA local,0,5,0
+RA-VLA local,1,5,2
+RA-VLA local,2,5,0
+RA-VLA local,3,5,3
+RA-VLA local,4,5,0
+RA-VLA local,5,5,0
+RA-VLA local,6,5,2
+RA-VLA local,7,5,0
+RA-VLA local,8,5,0
+RA-VLA local,9,5,0
+Action-only control 5k,0,5,0
+Action-only control 5k,1,5,0
+Action-only control 5k,2,5,2
+Action-only control 5k,3,5,2
+Action-only control 5k,4,5,0
+Action-only control 5k,5,5,2
+Action-only control 5k,6,5,2
+Action-only control 5k,7,5,0
+Action-only control 5k,8,5,0
+Action-only control 5k,9,5,1
+"Dual 5k, action eval",0,5,0
+"Dual 5k, action eval",1,5,1
+"Dual 5k, action eval",2,5,1
+"Dual 5k, action eval",3,5,1
+"Dual 5k, action eval",4,5,0
+"Dual 5k, action eval",5,5,0
+"Dual 5k, action eval",6,5,0
+"Dual 5k, action eval",7,5,0
+"Dual 5k, action eval",8,5,0
+"Dual 5k, action eval",9,5,0
+Action-only control 15k,0,5,0
+Action-only control 15k,1,5,1
+Action-only control 15k,2,5,2
+Action-only control 15k,3,5,1
+Action-only control 15k,4,5,0
+Action-only control 15k,5,5,1
+Action-only control 15k,6,5,1
+Action-only control 15k,7,5,0
+Action-only control 15k,8,5,1
+Action-only control 15k,9,5,1
+"Dual 15k, action eval",0,5,0
+"Dual 15k, action eval",1,5,0
+"Dual 15k, action eval",2,5,0
+"Dual 15k, action eval",3,5,1
+"Dual 15k, action eval",4,5,0
+"Dual 15k, action eval",5,5,0
+"Dual 15k, action eval",6,5,0
+"Dual 15k, action eval",7,5,0
+"Dual 15k, action eval",8,5,0
+"Dual 15k, action eval",9,5,0

@@ -1,0 +1,16 @@
+{
+  "status": "passed",
+  "cases": 12,
+  "pairs": 6,
+  "goal_queries_audited": 24,
+  "videos": 12,
+  "total_video_frames": 204,
+  "checks": [
+    "every prefix frame matched",
+    "mode starts identical",
+    "goal fixed to reference t+16",
+    "exact goal images reached the policy",
+    "output traces contain robot observations only",
+    "17 frames per video"
+  ]
+}

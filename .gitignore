@@ -128,3 +128,10 @@ output/
 outputs/ravla_eval/
 outputs/retrieval_cache/
 runs/gr00t/
+
+# Local experiment runs, checkpoints, caches, and downloaded model/data assets
+/outputs/
+/ra-vla-official-assets/
+
+# Matplotlib font cache
+.mpl-cache/

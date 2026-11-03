@@ -1,0 +1,61 @@
+method,task,task_description,successes,episodes
+RA-VLA (local),0,put both the alphabet soup and the tomato sauce in the basket,0,10
+RA-VLA (local),1,put both the cream cheese box and the butter in the basket,3,10
+RA-VLA (local),2,turn on the stove and put the moka pot on it,1,10
+RA-VLA (local),3,put the black bowl in the bottom drawer of the cabinet and close it,5,10
+RA-VLA (local),4,put the white mug on the left plate and put the yellow and white mug on the right plate,0,10
+RA-VLA (local),5,pick up the book and place it in the back compartment of the caddy,0,10
+RA-VLA (local),6,put the white mug on the plate and put the chocolate pudding to the right of the plate,2,10
+RA-VLA (local),7,put both the alphabet soup and the cream cheese box in the basket,0,10
+RA-VLA (local),8,put both moka pots on the stove,0,10
+RA-VLA (local),9,put the yellow and white mug in the microwave and close it,0,10
+Dual: action only,0,put both the alphabet soup and the tomato sauce in the basket,1,10
+Dual: action only,1,put both the cream cheese box and the butter in the basket,0,10
+Dual: action only,2,turn on the stove and put the moka pot on it,1,10
+Dual: action only,3,put the black bowl in the bottom drawer of the cabinet and close it,1,10
+Dual: action only,4,put the white mug on the left plate and put the yellow and white mug on the right plate,0,10
+Dual: action only,5,pick up the book and place it in the back compartment of the caddy,0,10
+Dual: action only,6,put the white mug on the plate and put the chocolate pudding to the right of the plate,0,10
+Dual: action only,7,put both the alphabet soup and the cream cheese box in the basket,0,10
+Dual: action only,8,put both moka pots on the stove,0,10
+Dual: action only,9,put the yellow and white mug in the microwave and close it,0,10
+"Adaptive q90, 2-chunk cap",0,put both the alphabet soup and the tomato sauce in the basket,1,10
+"Adaptive q90, 2-chunk cap",1,put both the cream cheese box and the butter in the basket,0,10
+"Adaptive q90, 2-chunk cap",2,turn on the stove and put the moka pot on it,0,10
+"Adaptive q90, 2-chunk cap",3,put the black bowl in the bottom drawer of the cabinet and close it,0,10
+"Adaptive q90, 2-chunk cap",4,put the white mug on the left plate and put the yellow and white mug on the right plate,0,10
+"Adaptive q90, 2-chunk cap",5,pick up the book and place it in the back compartment of the caddy,0,10
+"Adaptive q90, 2-chunk cap",6,put the white mug on the plate and put the chocolate pudding to the right of the plate,0,10
+"Adaptive q90, 2-chunk cap",7,put both the alphabet soup and the cream cheese box in the basket,0,10
+"Adaptive q90, 2-chunk cap",8,put both moka pots on the stove,0,10
+"Adaptive q90, 2-chunk cap",9,put the yellow and white mug in the microwave and close it,0,10
+"Adaptive q95, 2-chunk cap",0,put both the alphabet soup and the tomato sauce in the basket,1,10
+"Adaptive q95, 2-chunk cap",1,put both the cream cheese box and the butter in the basket,0,10
+"Adaptive q95, 2-chunk cap",2,turn on the stove and put the moka pot on it,0,10
+"Adaptive q95, 2-chunk cap",3,put the black bowl in the bottom drawer of the cabinet and close it,0,10
+"Adaptive q95, 2-chunk cap",4,put the white mug on the left plate and put the yellow and white mug on the right plate,0,10
+"Adaptive q95, 2-chunk cap",5,pick up the book and place it in the back compartment of the caddy,0,10
+"Adaptive q95, 2-chunk cap",6,put the white mug on the plate and put the chocolate pudding to the right of the plate,0,10
+"Adaptive q95, 2-chunk cap",7,put both the alphabet soup and the cream cheese box in the basket,0,10
+"Adaptive q95, 2-chunk cap",8,put both moka pots on the stove,0,10
+"Adaptive q95, 2-chunk cap",9,put the yellow and white mug in the microwave and close it,0,10
+"Adaptive q90, until q80",0,put both the alphabet soup and the tomato sauce in the basket,0,10
+"Adaptive q90, until q80",1,put both the cream cheese box and the butter in the basket,0,10
+"Adaptive q90, until q80",2,turn on the stove and put the moka pot on it,0,10
+"Adaptive q90, until q80",3,put the black bowl in the bottom drawer of the cabinet and close it,0,10
+"Adaptive q90, until q80",4,put the white mug on the left plate and put the yellow and white mug on the right plate,0,10
+"Adaptive q90, until q80",5,pick up the book and place it in the back compartment of the caddy,0,10
+"Adaptive q90, until q80",6,put the white mug on the plate and put the chocolate pudding to the right of the plate,0,10
+"Adaptive q90, until q80",7,put both the alphabet soup and the cream cheese box in the basket,0,10
+"Adaptive q90, until q80",8,put both moka pots on the stove,0,10
+"Adaptive q90, until q80",9,put the yellow and white mug in the microwave and close it,0,10
+"Adaptive q95, until q80",0,put both the alphabet soup and the tomato sauce in the basket,0,10
+"Adaptive q95, until q80",1,put both the cream cheese box and the butter in the basket,0,10
+"Adaptive q95, until q80",2,turn on the stove and put the moka pot on it,0,10
+"Adaptive q95, until q80",3,put the black bowl in the bottom drawer of the cabinet and close it,0,10
+"Adaptive q95, until q80",4,put the white mug on the left plate and put the yellow and white mug on the right plate,0,10
+"Adaptive q95, until q80",5,pick up the book and place it in the back compartment of the caddy,0,10
+"Adaptive q95, until q80",6,put the white mug on the plate and put the chocolate pudding to the right of the plate,0,10
+"Adaptive q95, until q80",7,put both the alphabet soup and the cream cheese box in the basket,0,10
+"Adaptive q95, until q80",8,put both moka pots on the stove,0,10
+"Adaptive q95, until q80",9,put the yellow and white mug in the microwave and close it,0,10

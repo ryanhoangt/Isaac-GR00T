@@ -1,0 +1,5 @@
+left,right,left_only,right_only,both,neither
+Action-only control 5k,"Dual 5k, action eval",8,2,1,39
+Action-only control 15k,"Dual 15k, action eval",8,1,0,41
+Action-only control 5k,RA-VLA local,6,4,3,37
+Action-only control 15k,RA-VLA local,7,6,1,36

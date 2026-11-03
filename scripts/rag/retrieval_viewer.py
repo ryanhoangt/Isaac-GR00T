@@ -75,8 +75,18 @@ def timeline(episode, query):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--cache-root", default="outputs/retrieval_cache")
+    parser.add_argument("--eval-root", default="outputs/ravla_eval")
+    parser.add_argument("--view", choices=("retrieval", "dual"), default="retrieval")
     args = parser.parse_args()
     st.set_page_config(page_title="RA-VLA · Retrieval explorer", page_icon="🔎", layout="wide")
+    view = st.sidebar.radio(
+        "Viewer", ["Dual-mode rollouts", "Offline retrieval cache"], index=0 if args.view == "dual" else 1
+    )
+    if view == "Dual-mode rollouts":
+        from scripts.rag.dual_mode_viewer import render
+
+        render(args.eval_root)
+        return
     st.title("RA-VLA retrieval explorer")
     st.caption("Inspect rollout observations alongside retrieved memory segments.")
 
