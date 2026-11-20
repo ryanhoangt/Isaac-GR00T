@@ -1,10 +1,9 @@
 # RoboMME data preparation for GR00T N1.5
 
-The primary converter now accepts a **local RoboMME LeRobot v2.x directory**,
-not an HDF5 file or a Hub repo ID. It does not download anything. The earlier
-single-episode HDF5 converter is also retained below as an optional alternative.
-A RoboMME training data config, training launcher and evaluation adapter remain
-separate next steps and have not been implemented yet.
+The converter accepts a **local RoboMME LeRobot v2.x directory**, not a Hub
+repo ID, and does not download anything. `RoboMMEDataConfig` now connects the
+converted dataset to GR00T transforms and the existing collator. A training
+launcher, model training checks and evaluation adapter are separate next steps.
 
 ## Convert a local LeRobot v2.1 dataset (all episodes)
 
@@ -107,231 +106,75 @@ statistics, decoded video order, GR00T loading/padding, resume without re-encodi
 changed-source rejection, invalid demo flags, corrupt images and v3 rejection.
 The downloaded public dataset has not yet been converted in full by the assistant.
 
-## Alternative: convert one HDF5 episode
+## RoboMME data configuration (step 2)
 
-Use the GR00T Python environment, which provides `h5py`, `numpy`, `pandas`,
-`pyarrow` and PyAV (`av`). The converter does not need the simulator, the
-policy-learning package, a model checkpoint, or the upstream LeRobot package.
+Load the config through the existing external-config interface:
 
-From the repository root:
+```python
+from gr00t.experiment.data_config import load_data_config
 
-```bash
-python scripts/convert_robomme_hdf5.py \
-    --source /mnt/data/vhoangth2/repos/robomme_policy_learning/data/robomme_data_h5/record_dataset_InsertPeg.h5 \
-    --episode-index 0 \
-    --fps 10 \
-    --output /tmp/robomme_insertpeg_ep0
+config = load_data_config("examples.RoboMME.custom_data_config:RoboMMEDataConfig")
+modalities = config.modality_config()
+transforms = config.transform()
 ```
 
-The output directory must not already exist. The raw HDF5 file is opened
-read-only. Images are read one frame at a time, with only the episode's small
-state/action arrays retained for parquet and exact normalization statistics.
-Temporary output is published only when conversion completes; a failure cleans
-up that invocation's temporary files.
+The corresponding fine-tuning argument is
+`--data-config examples.RoboMME.custom_data_config:RoboMMEDataConfig`, with
+`--embodiment-tag new_embodiment`. This step does not add a training launcher.
 
-The export contains:
+The configuration defines:
+
+- Current front and wrist RGB images, in that order; no history or demo frames.
+- Seven joint positions plus the first finger's physical opening as state.
+- Sixteen consecutive absolute actions: seven joint targets plus a -1/+1
+  gripper command. No temporal shift or conversion to relative joint targets.
+- The task instruction as the only language input. Stored subgoal annotations
+  are not read by the config.
+- Per-field min-max normalization from the converted dataset's statistics.
+  State/action and joints/gripper use separate statistics; the physical state
+  gripper range and action command range are never interchanged. A joint's
+  normalized target is `2 * (target - min) / (max - min) - 1`.
+- The same image recipe as the LIBERO example: a 0.95 crop and color jitter
+  during training, resize to 224 by 224, with deterministic preprocessing in
+  eval mode.
+- State padding from 8 to 64 dimensions and action padding from 8 to 32, with
+  masks identifying only the eight real dimensions. Action inverse transforms
+  recover physical absolute joint targets and gripper commands.
+
+After dataset metadata is set, training mode produces a padded state of shape
+`(1, 64)` and action chunk `(16, 32)`. `DefaultDataCollator` adds the batch
+axis and processes the two images plus instruction with the bundled Eagle
+processor. Inference uses `transforms.eval()` and accepts observations without
+any action labels.
+
+The exported dataset remains in absolute joint space. Unlike the reference
+MME-VLA trainer's delta-joint transform, this initial GR00T recipe learns
+normalized absolute targets. This is an explicit baseline choice; changing it
+later requires consistent inverse transforms and statistics.
+
+Use `LeRobotSingleDataset` with the config's modalities/transforms and
+`embodiment_tag="new_embodiment"`. The CPU checks use `video_backend="decord"`
+and `video_backend_kwargs={"num_threads": 1}` to bound decoder CPU use. The
+validated local dataset is:
 
 ```text
-data/chunk-000/episode_000000.parquet
-videos/chunk-000/observation.images.image/episode_000000.mp4
-videos/chunk-000/observation.images.wrist_image/episode_000000.mp4
-meta/info.json
-meta/episodes.jsonl
-meta/tasks.jsonl
-meta/modality.json
-meta/stats.json
-meta/episode_mapping.json
-manifest.json
+/mnt/data/vhoangth2/datasets/robomme_gr00t_lerobot_v21
 ```
 
-- Output episode ID is always 0; `--episode-index` selects the source episode.
-- Only execution frames are exported. Demo flags must form a contiguous prefix.
-- Observation and action stay at the **same source timestep**, following the
-  policy-learning builder. Joint targets remain absolute; no delta transform
-  or action chunks are baked into parquet.
-- State uses 7 joint positions and the first gripper finger position. The
-  action's last value remains -1 (close) or +1 (open).
-- The first source task instruction, lowercased like the reference builder,
-  becomes task 0. All original instructions are retained in the mapping.
-- `source_timestep` in parquet and `meta/episode_mapping.json` preserve source
-  provenance and the original demo boundary. Demo video itself is not copied.
-- Statistics are computed only from exported execution states/actions. Every
-  exported frame, including a recorded terminal frame, is retained.
-- Two H.264 videos use CRF 18 and `yuv420p`; RGB compression is lossy. No spatial
-  resizing is performed.
+It has 1,600 episodes and 476,857 execution frames. A separate data audit matched
+all exported state/action rows to the local source, recomputed the global
+statistics, checked all 3,200 video headers and decoded 54 loader samples.
 
-`--fps` is required: timestamps restart at zero and advance by `1 / fps`; one
-source timestep becomes one video frame. **There is no temporal resampling.**
-The example uses 10 FPS, the convention advertised by the published RoboMME
-LeRobot datasets. This does not prove the physical control frequency of the
-raw HDF5 recording or reproduce any upstream resampling. Record the selected
-FPS when comparing experiments.
-
-The output can be inspected with `LeRobotSingleDataset` using video keys
-`video.image` / `video.wrist_image`, state/action keys `joint_position` /
-`gripper`, language key `annotation.human.action.task_description` and embodiment
-`new_embodiment`. A train-ready `RoboMMEDataConfig` is a separate next step.
-
-## Local data inspected
-
-Assessment date: 2026-11-20.
-
-Raw HDF5 directory on this machine:
-
-```text
-/mnt/data/vhoangth2/repos/robomme_policy_learning/data/robomme_data_h5
-```
-
-The directory contains 16 `record_dataset_<task>.h5` files, each with 100 episode
-groups: 1,600 episodes in total. Their combined file size is 512,595,968,744 bytes
-(512.60 GB / 477.39 GiB). The existing `robomme_preprocessed_data` directory
-contains the policy-learning repo's custom pickle data and cached features;
-it is not a LeRobot dataset that GR00T can load directly.
-
-The dataset README advertises `Yinpei/robomme_data_lerobot`, but no local copy was
-identified in the policy-learning data directory, the inspected Hugging Face
-cache locations, or the top-level shared datasets directory. Subsequent remote
-metadata inspection found two published variants:
-
-- [`Yinpei/robomme_data_lerobot`](https://huggingface.co/datasets/Yinpei/robomme_data_lerobot/blob/main/meta/info.json):
-  v2.1 with images stored in parquet, rather than separate video files.
-- [`lerobot/robomme`](https://huggingface.co/datasets/lerobot/robomme): v3.0 with
-  camera videos and shared-file episode indexing.
-
-Both advertise 1,600 episodes, 768,897 frames and 10 FPS. Neither is directly
-loadable by this repo's existing video-based v2 loader. Their metadata was
-inspected, but their training data was not downloaded or compared frame by
-frame with the local HDF5 files. The converter uses the available local HDF5.
-
-The following inventory comes from `episode_0` of each HDF5 file. These lengths
-and demo boundaries are examples, not assumptions for every episode in a task.
-Timestep indices start at zero.
-
-| Task | Episodes in file | Steps in episode 0 | First execution timestep |
-| --- | ---: | ---: | ---: |
-| BinFill | 100 | 550 | 0 |
-| ButtonUnmask | 100 | 291 | 0 |
-| ButtonUnmaskSwap | 100 | 514 | 0 |
-| InsertPeg | 100 | 475 | 238 |
-| MoveCube | 100 | 425 | 234 |
-| PatternLock | 100 | 96 | 48 |
-| PickHighlight | 100 | 308 | 0 |
-| PickXtimes | 100 | 529 | 0 |
-| RouteStick | 100 | 200 | 100 |
-| StopCube | 100 | 459 | 0 |
-| SwingXtimes | 100 | 482 | 0 |
-| VideoPlaceButton | 100 | 1048 | 765 |
-| VideoPlaceOrder | 100 | 1200 | 940 |
-| VideoRepick | 100 | 756 | 321 |
-| VideoUnmask | 100 | 239 | 66 |
-| VideoUnmaskSwap | 100 | 326 | 168 |
-
-## Observed schema and proposed baseline mapping
-
-The baseline would consume the current front/wrist images and robot state,
-condition on the task instruction, and predict absolute joint-space actions.
-It would not consume history or the conditioning video.
-
-| Source HDF5 field | Observed shape / meaning | Proposed GR00T use |
-| --- | --- | --- |
-| `setup/task_goal` | List of language instructions | Task text, indexed by `task_index` |
-| `timestep_<t>/obs/front_rgb` | `uint8 (256, 256, 3)` | `video.image` |
-| `timestep_<t>/obs/wrist_rgb` | `uint8 (256, 256, 3)` | `video.wrist_image` |
-| `timestep_<t>/obs/joint_state` | 7 absolute joint positions | `state.joint_position`, dimensions 0:7 |
-| `timestep_<t>/obs/gripper_state` | 2 finger positions | First finger as `state.gripper`, dimension 7:8 |
-| `timestep_<t>/action/joint_action` | 7 absolute joint targets + gripper | `action.joint_position` (0:7) and `action.gripper` (7:8) |
-| `timestep_<t>/info/is_video_demo` | Conditioning-video flag | Exclude demo frames as supervised action examples |
-
-The proposed 8-dimensional state follows `pack_state()` in the existing RoboMME
-evaluator. Gripper state is a physical opening (documented range 0 to 0.04),
-whereas the gripper action is a command: -1 closes and +1 opens. They must not
-share normalization statistics. The stick tasks have a fixed gripper slot.
-
-Demo prefixes also occur in tasks without `Video` in their name. Conversion
-must inspect `is_video_demo` for each episode rather than infer the boundary
-from the task name. Preserve the source task, source episode, original timestep,
-and demo boundary so a later memory implementation can recover the demo.
-
-## Compatibility with the current GR00T loader
-
-`gr00t/data/dataset.py` reads episode parquet files and camera videos, with:
-
-- `meta/info.json`: features, FPS, chunk size and parquet/video path patterns.
-- `meta/episodes.jsonl`: episode IDs and lengths.
-- `meta/tasks.jsonl`: task indices and language instructions.
-- `meta/modality.json`: GR00T mappings for state, action, cameras and language.
-- `meta/stats.json`: normalization statistics (the loader can also compute
-  missing statistics from parquet).
-
-The proposed baseline fits the existing loader/model interface. A dedicated
-RoboMME data config and compatible dataset export are still required. The
-existing LIBERO config describes a different state/action representation and
-cannot be reused unchanged.
-
-The single-episode converter uses the available raw files without changing the
-core GR00T loader. It does not implement bulk conversion, automatic train/val
-splits, dataset merging or model training.
-
-## Training conventions and limitations
-
-- **Observation/action alignment:** the current benchmark `RecordWrapper.step()`
-  calls `super().step(action)` before recording images and joint state alongside
-  that action. The current MME-VLA builder instead uses observation and action
-  from the same HDF5 timestep. This is a possible post-action observation issue;
-  the checked-out recorder alone does not establish how these released HDF5
-  files were generated. The converter deliberately follows the reference
-  builder's same-row pairing to preserve comparability, without claiming to
-  resolve that recording-provenance question. The reference trainer additionally
-  converts joint targets to deltas relative to the current state; that is an
-  action representation transform, not a temporal shift, and is not applied by
-  this converter.
-- **Timing:** the inspected files have no root attributes specifying FPS. Do
-  not infer controller frequency from a visualization video's playback FPS.
-  This converter requires an explicit export FPS as described above.
-- **Training subset:** the GR00T loader enumerates all episodes listed in
-  `episodes.jsonl`; it does not filter training samples using `info.json`'s
-  `splits` field. Any validation subset must be excluded from the training
-  episode list and training normalization statistics.
-- **Tail padding:** parquet stores one absolute action per frame. The current
-  GR00T loader repeats the final action for out-of-range future indices when
-  the modality has `absolute=true`, as emitted here. This matches the reference
-  builder's final-action padding and does not cross the episode boundary.
-
-## Scope of verification
-
-Opened all 16 HDF5 files read-only and counted their episode groups. Inspected
-the first, first-execution and final timestep of `episode_0` in each file for
-camera shape/dtype, state/action shape, demo/completion flags, and finite joint
-state/action values. Read actual image arrays from selected timesteps of
-BinFill, InsertPeg and VideoPlaceOrder successfully.
-
-This initial assessment was a schema/sample inspection, not a full integrity
-scan of 1,600 episodes. It did not modify the source data or train a model.
-Converter tests use synthetic HDF5 to verify same-row pairing, demo exclusion,
-execution-only statistics, decoded video frame order, GR00T loading and tail
-padding, rejection of invalid input, and protection of existing output.
-
-Run the converter tests with:
+Run the config tests **inside a CPU allocation**, not on the login node:
 
 ```bash
-python -m pytest -q tests/test_robomme_conversion.py
+env USE_TF=0 USE_FLAX=0 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 \
+    NO_ALBUMENTATIONS_UPDATE=1 OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 \
+    python -m pytest -q tests/test_robomme_data_config.py
 ```
 
-The four tests passed in the existing GR00T environment. A real-data check also
-converted InsertPeg `episode_0`: 238 demo frames were excluded and 237 execution
-frames (source timesteps 238 through 474) were exported. All exported states and
-actions matched their source HDF5 rows exactly; both videos decoded all 237
-frames. GR00T loaded the first, middle and final samples, including 16-step
-action chunks with final-action padding. The real-data output was written only
-under `/tmp`; it is not part of the repository.
-
-Source code reviewed in the sibling checkouts:
-
-- `robomme_benchmark/doc/h5_data_format.md` and `doc/env_format.md`.
-- `robomme_benchmark/src/robomme/env_record_wrapper/RecordWrapper.py`.
-- `robomme_policy_learning/src/mme_vla_suite/dataset_builder/build_robomme_dataset.py`
-  and `robomme_h5_utils.py`.
-- `robomme_policy_learning/examples/robomme/env_runner.py`.
-
-The standalone benchmark and policy-learning benchmark submodule both reported
-revision `985caf6` during inspection.
+These checks use the bundled Eagle processor and real collator on CPU; no model
+weights, model forward/backward pass or GPU are needed. They verify absolute
+normalization targets, independent gripper scales, dimension masks, action
+round-trip, inference without labels, camera/language order and finite collated
+outputs. GPU training validation remains the next stage.
