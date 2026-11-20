@@ -386,8 +386,8 @@ not been tested with this checkpoint.
 
 `examples/RoboMME/adapter.py` provides two NumPy-only mapping functions. They
 follow the benchmark's buffered observation interface and the existing
-`RoboMMEDataConfig`. This step prepares the data boundary; server communication
-and the evaluation entry point are subsequent steps.
+`RoboMMEDataConfig`. The HTTP client described below uses this mapping; the
+evaluation entry point remains the next step.
 
 ```python
 from examples.RoboMME.adapter import to_gr00t_observation, to_robomme_actions
@@ -430,4 +430,66 @@ env PYTHONPATH=/mnt/data/vhoangth2/repos/Isaac-GR00T \
     tests/test_robomme_adapter.py tests/test_robomme_data_config.py
 ```
 
-These checks need no simulator, checkpoint weights, network connection or GPU.
+The mapping and transform checks need no simulator, checkpoint weights or GPU.
+The HTTP checks below additionally start a local test server on the CPU node.
+
+## HTTP inference client (adapter step 2)
+
+`RoboMMEGr00tClient`, in the same adapter module, exposes `infer(inputs)` and
+`reset()` for the benchmark's observation format. It reuses the existing
+`scripts/inference_service.py --server --http-server`; no benchmark or policy
+repo modifications are needed. The simulator environment needs NumPy, Requests
+and `json-numpy` for the client. Model loading stays in the GR00T environment.
+
+To serve a trained checkpoint, run from this repo **inside a GPU allocation**:
+
+```bash
+ROBOMME_CHECKPOINT=/path/to/checkpoint
+
+env PYTHONPATH=/mnt/data/vhoangth2/repos/Isaac-GR00T \
+    USE_TF=0 USE_FLAX=0 HF_HUB_OFFLINE=1 HF_DATASETS_OFFLINE=1 \
+    NO_ALBUMENTATIONS_UPDATE=1 TOKENIZERS_PARALLELISM=false \
+    OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \
+    /home/vhoangth2/miniconda3/envs/gr00t/bin/python -u scripts/inference_service.py \
+    --server --http-server --host 0.0.0.0 --port 8000 \
+    --model-path "$ROBOMME_CHECKPOINT" \
+    --data-config examples.RoboMME.custom_data_config:RoboMMEDataConfig \
+    --embodiment-tag new_embodiment --seed 42
+```
+
+Use the checkpoint directory containing `experiment_cfg/metadata.json`. The
+existing policy reads that checkpoint's normalization statistics and applies
+eval transforms and inverse action transforms. The client does not load a
+dataset or apply normalization itself.
+
+The client can be called in the simulator process, with this checkout on its
+`PYTHONPATH`:
+
+```python
+from examples.RoboMME.adapter import RoboMMEGr00tClient
+
+# For a server on another node, replace 127.0.0.1 with its reachable hostname/IP.
+with RoboMMEGr00tClient("http://127.0.0.1:8000", timeout=60.0) as client:
+    assert client.reset()["reset_finished"]
+    actions = client.infer(benchmark_inputs)["actions"]  # float32 (H, 8)
+```
+
+`infer()` maps the current observation, posts `{"observation": ...}` to `/act`
+using explicit NumPy-aware JSON encoding, decodes the physical action fields
+and packs them with `to_robomme_actions`. The client uses a persistent Requests
+session and does not patch Python's global JSON functions. HTTP errors and
+timeouts propagate, and malformed responses or actions are rejected. Inference
+is never retried automatically: an interrupted request may already have
+advanced the server's sampling RNG.
+
+`reset()` returns `{"reset_finished": True}` locally. This baseline retains no
+history or action queue, and the GR00T HTTP server has no reset endpoint. Reset
+does not reseed the model server; the rollout runner owns its action queue.
+The context manager closes the HTTP session when evaluation finishes.
+
+The test command above also exercises a local instance of the **actual GR00T
+HTTP server with a fake policy**, in a separate process. Checks cover NumPy
+dtype/shape and Unicode instruction round-trips, consecutive episodes, reset,
+server errors, invalid action fields, malformed responses and timeouts without
+retry. These tests load no model weights and use no simulator or GPU. A real
+checkpoint inference and simulator rollout remain for the later GPU smoke step.

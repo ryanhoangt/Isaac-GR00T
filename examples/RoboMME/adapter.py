@@ -1,11 +1,14 @@
-"""Map RoboMME observations and physical GR00T actions for the reactive baseline.
+"""Observation/action mapping and HTTP inference for the reactive RoboMME baseline.
 
-These functions use only NumPy. Image preprocessing and state/action normalization
-belong to Gr00tPolicy and RoboMMEDataConfig, using the checkpoint's metadata.
+Mapping functions use only NumPy; the HTTP client lazily imports requests and
+json_numpy. Image preprocessing and state/action normalization belong to
+Gr00tPolicy and RoboMMEDataConfig, using the checkpoint's metadata.
 """
 
 from collections.abc import Mapping
+import math
 from typing import Any
+from urllib.parse import urlsplit
 
 import numpy as np
 
@@ -103,3 +106,64 @@ def to_robomme_actions(prediction: Mapping[str, Any]) -> np.ndarray:
     if gripper.shape != (len(joints), 1):
         raise ValueError("action.gripper must have shape (H, 1) with the same horizon as joint positions")
     return np.concatenate([joints, gripper], axis=1)
+
+
+class RoboMMEGr00tClient:
+    """Expose the benchmark infer/reset interface over GR00T's existing /act API.
+
+    The model server owns checkpoint loading and normalization. This client
+    keeps no episode memory or action queue, and does not retry inference calls.
+    Use as a context manager or call close() when evaluation finishes.
+    """
+
+    def __init__(self, server_url: str = "http://127.0.0.1:5555", *, timeout: float = 60.0):
+        parsed = urlsplit(server_url)
+        if parsed.scheme not in ("http", "https") or not parsed.netloc or parsed.query or parsed.fragment:
+            raise ValueError("server_url must be an HTTP(S) base URL without a query or fragment")
+        if not math.isfinite(timeout) or timeout <= 0:
+            raise ValueError("timeout must be positive and finite")
+
+        import json_numpy
+        import requests
+
+        self.server_url = server_url.rstrip("/")
+        self.timeout = timeout
+        self._json_numpy = json_numpy
+        self._session = requests.Session()
+
+    def infer(self, inputs: Mapping[str, Any]) -> dict[str, np.ndarray]:
+        """Send the current observation and return {"actions": float32 (H, 8)}.
+
+        HTTP and timeout errors propagate as requests exceptions. Invalid JSON
+        or physical action fields raise ValueError. A failed call is not retried
+        because inference may already have advanced the server's sampling RNG.
+        """
+        observation = to_gr00t_observation(inputs)
+        response = self._session.post(
+            f"{self.server_url}/act",
+            data=self._json_numpy.dumps({"observation": observation}),
+            headers={"Content-Type": "application/json"},
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        prediction = self._json_numpy.loads(response.content)
+        if not isinstance(prediction, Mapping):
+            raise ValueError("GR00T /act response must be a mapping of physical action fields")
+        return {"actions": to_robomme_actions(prediction)}
+
+    def reset(self) -> dict[str, bool]:
+        """Acknowledge the episode boundary for this stateless baseline.
+
+        GR00T's HTTP API has no reset endpoint. No request is sent and the
+        server's sampling RNG is not reseeded. The rollout runner owns its queue.
+        """
+        return {"reset_finished": True}
+
+    def close(self) -> None:
+        self._session.close()
+
+    def __enter__(self) -> "RoboMMEGr00tClient":
+        return self
+
+    def __exit__(self, *exc: Any) -> None:
+        self.close()
