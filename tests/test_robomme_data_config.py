@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 import torch
 
+from examples.RoboMME.adapter import to_gr00t_observation, to_robomme_actions
 from gr00t.data.schema import DatasetMetadata
 from gr00t.experiment.data_config import load_data_config
 from gr00t.model.transforms import DefaultDataCollator
@@ -117,3 +118,27 @@ def test_training_batch_uses_real_collator(example):
         if isinstance(value, torch.Tensor):
             assert value.device.type == "cpu"
             assert torch.isfinite(value).all()
+
+
+def test_benchmark_mapping_matches_training_and_inverse_actions(example):
+    config, transforms, raw = example
+    inputs = {
+        "front_rgb_list": [np.zeros_like(raw["video.image"][0]), raw["video.image"][0]],
+        "wrist_rgb_list": [np.zeros_like(raw["video.wrist_image"][0]), raw["video.wrist_image"][0]],
+        "joint_state_list": [np.zeros(7), raw["state.joint_position"][0]],
+        "gripper_state_list": [np.zeros(2), np.array([raw["state.gripper"][0, 0], 0.03])],
+        "task_goal": raw["annotation.human.action.task_description"],
+        "is_first_step": True,
+    }
+    observation = to_gr00t_observation(inputs)
+    for key in config.video_keys + config.state_keys + config.language_keys:
+        np.testing.assert_array_equal(observation[key], raw[key])
+    training = transforms(copy.deepcopy(raw))
+    transforms.eval()
+    inference = transforms(copy.deepcopy(observation))
+    assert inference["state"].shape == (1, 64) and "action" not in inference
+    # Simulate the real policy's inverse transform, then pack the physical predictions.
+    physical = transforms.unapply({"action": torch.from_numpy(training["action"][None].copy())})
+    actions = to_robomme_actions({key: physical[key][0] for key in config.action_keys})
+    expected = np.concatenate([raw[key] for key in config.action_keys], axis=-1)
+    np.testing.assert_allclose(actions, expected, atol=5e-7)
