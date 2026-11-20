@@ -2,8 +2,9 @@
 
 The converter accepts a **local RoboMME LeRobot v2.x directory**, not a Hub
 repo ID, and does not download anything. `RoboMMEDataConfig` now connects the
-converted dataset to GR00T transforms and the existing collator. A training
-launcher, model training checks and evaluation adapter are separate next steps.
+converted dataset to GR00T transforms and the existing collator. Fine-tuning
+uses `scripts/gr00t_finetune.py` directly. GPU training checks and an evaluation
+adapter are separate next steps.
 
 ## Convert a local LeRobot v2.1 dataset (all episodes)
 
@@ -178,3 +179,67 @@ weights, model forward/backward pass or GPU are needed. They verify absolute
 normalization targets, independent gripper scales, dimension masks, action
 round-trip, inference without labels, camera/language order and finite collated
 outputs. GPU training validation remains the next stage.
+
+## Fine-tune with the existing trainer
+
+Use `scripts/gr00t_finetune.py` directly; no RoboMME-specific training launcher
+or trainer changes are needed. Run from the repository root **inside a GPU
+allocation**, using the existing GR00T environment. Preserve Slurm's
+`CUDA_VISIBLE_DEVICES`; the commands use one allocated GPU.
+
+Start with this 10-step smoke run. The existing trainer logs every 10 steps,
+so this checks its normal logging interval and saves one checkpoint without a
+duplicate final model export:
+
+```bash
+env USE_TF=0 USE_FLAX=0 HF_HUB_OFFLINE=1 HF_DATASETS_OFFLINE=1 \
+    NO_ALBUMENTATIONS_UPDATE=1 TOKENIZERS_PARALLELISM=false \
+    OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 WANDB_MODE=disabled \
+  /home/vhoangth2/miniconda3/envs/gr00t/bin/python -u scripts/gr00t_finetune.py \
+    --dataset-path /mnt/data/vhoangth2/datasets/robomme_gr00t_lerobot_v21 \
+    --base-model-path /mnt/data/vhoangth2/hf_cache/hub/models--nvidia--GR00T-N1.5-3B/snapshots/869830fc749c35f34771aa5209f923ac57e4564e \
+    --data-config examples.RoboMME.custom_data_config:RoboMMEDataConfig \
+    --embodiment-tag new_embodiment --num-gpus 1 --seed 42 \
+    --batch-size 2 --gradient-accumulation-steps 1 \
+    --learning-rate 3e-5 --warmup-ratio 0 --max-steps 10 \
+    --save-steps 10 --save-total-limit 1 --no-save-final-model \
+    --dataloader-num-workers 2 --dataloader-prefetch-factor 2 \
+    --video-backend torchvision_av --report-to wandb \
+    --output-dir outputs/robomme_smoke_seed42
+```
+
+After the smoke run succeeds, a starting full-training recipe is:
+
+```bash
+env USE_TF=0 USE_FLAX=0 HF_HUB_OFFLINE=1 HF_DATASETS_OFFLINE=1 \
+    NO_ALBUMENTATIONS_UPDATE=1 TOKENIZERS_PARALLELISM=false \
+    OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \
+    WANDB_MODE=offline WANDB_PROJECT=gr00t-robomme WANDB_LOG_MODEL=false \
+  /home/vhoangth2/miniconda3/envs/gr00t/bin/python -u scripts/gr00t_finetune.py \
+    --dataset-path /mnt/data/vhoangth2/datasets/robomme_gr00t_lerobot_v21 \
+    --base-model-path /mnt/data/vhoangth2/hf_cache/hub/models--nvidia--GR00T-N1.5-3B/snapshots/869830fc749c35f34771aa5209f923ac57e4564e \
+    --data-config examples.RoboMME.custom_data_config:RoboMMEDataConfig \
+    --embodiment-tag new_embodiment --num-gpus 1 --seed 42 \
+    --batch-size 16 --gradient-accumulation-steps 2 \
+    --learning-rate 3e-5 --warmup-ratio 0.05 --max-steps 20000 \
+    --save-steps 1000 --save-total-limit 2 --no-save-final-model \
+    --dataloader-num-workers 2 --dataloader-prefetch-factor 2 \
+    --video-backend torchvision_av --report-to wandb \
+    --output-dir outputs/robomme_train_seed42
+```
+
+The full recipe has effective batch size 32 on one GPU. These hyperparameters
+are a starting point; GPU memory use, loss and checkpoint saving have not yet
+been validated on RoboMME. Both commands retain the trainer defaults: frozen
+vision/language backbone, trainable projector and diffusion action head,
+bfloat16 training and TF32. Choose a GPU compatible with those defaults.
+
+Use a new output directory for each fresh run. To continue an interrupted run,
+keep its recipe and output directory and add `--resume`. No command above
+submits a Slurm job or requests resources automatically.
+
+The CPU validation in allocation 66430 checks the existing CLI argument parser
+and the real converted dataset through `torchvision_av`, two DataLoader workers
+and `DefaultDataCollator`. It uses the first and final samples, verifying finite
+state/action tensors and masks. This validates the input path only; no model
+weights are loaded and no model forward/backward or training is run on CPU.
