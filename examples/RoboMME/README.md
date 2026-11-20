@@ -386,8 +386,8 @@ not been tested with this checkpoint.
 
 `examples/RoboMME/adapter.py` provides two NumPy-only mapping functions. They
 follow the benchmark's buffered observation interface and the existing
-`RoboMMEDataConfig`. The HTTP client described below uses this mapping; the
-evaluation entry point remains the next step.
+`RoboMMEDataConfig`. The HTTP client and evaluation entry point described below
+use this mapping.
 
 ```python
 from examples.RoboMME.adapter import to_gr00t_observation, to_robomme_actions
@@ -493,3 +493,108 @@ dtype/shape and Unicode instruction round-trips, consecutive episodes, reset,
 server errors, invalid action fields, malformed responses and timeouts without
 retry. These tests load no model weights and use no simulator or GPU. A real
 checkpoint inference and simulator rollout remain for the later GPU smoke step.
+
+## Held-out evaluation entry point (adapter step 3)
+
+`python -m examples.RoboMME.eval` runs a remote checkpoint on the `excluded_tasks`
+in the **training dataset's** extraction manifest. All integration code lives in
+this checkout. The runner imports `BenchmarkEnvBuilder` from the explicitly
+selected RoboMME clone and uses its environment `reset`/`step` API, test episode
+metadata and joint-angle controller. The small local rollout loop adds an
+execution horizon, a strict step budget and cleanup on errors.
+
+First preview the protocol **inside a CPU allocation**. This reads only JSON
+metadata, without importing the simulator, contacting the server or creating an
+output directory:
+
+```bash
+cd /mnt/data/vhoangth2/repos/Isaac-GR00T
+ROBOMME_CHECKPOINT=/path/to/checkpoint
+
+env PYTHONPATH=/mnt/data/vhoangth2/repos/Isaac-GR00T \
+    OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \
+    /home/vhoangth2/miniconda3/envs/gr00t/bin/python -m examples.RoboMME.eval \
+    --manifest /mnt/data/vhoangth2/datasets/robomme_primary_train_v21/manifest.json \
+    --checkpoint "$ROBOMME_CHECKPOINT" \
+    --benchmark-root /mnt/data/vhoangth2/repos/robomme_benchmark \
+    --output-dir outputs/robomme_eval/primary_seed42 \
+    --server-url http://127.0.0.1:8000 \
+    --num-episodes 50 --exec-horizon 16 --max-steps 1300 --seed 42 \
+    --dry-run
+```
+
+For the real run, start the checkpoint's HTTP server as in step 2 and use the
+**RoboMME simulator environment** for this command, inside an allocation with
+the required simulation/rendering resources. Set the same checkpoint and model
+seed in the server command. If the server runs on another node, replace the URL
+with that node's reachable hostname/IP:
+
+```bash
+env PYTHONPATH=/mnt/data/vhoangth2/repos/Isaac-GR00T PYTHONDONTWRITEBYTECODE=1 \
+    OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \
+    /home/vhoangth2/.local/share/mamba/envs/robomme/bin/python -m examples.RoboMME.eval \
+    --manifest /mnt/data/vhoangth2/datasets/robomme_primary_train_v21/manifest.json \
+    --checkpoint "$ROBOMME_CHECKPOINT" \
+    --benchmark-root /mnt/data/vhoangth2/repos/robomme_benchmark \
+    --output-dir outputs/robomme_eval/primary_seed42 \
+    --server-url http://127.0.0.1:8000 \
+    --num-episodes 50 --exec-horizon 16 --max-steps 1300 --seed 42
+```
+
+The primary protocol selects ButtonUnmaskSwap, PatternLock, PickHighlight and
+PickXtimes, with 50 test episodes each. For a LOSO checkpoint, supply its training
+dataset's manifest and a separate output directory. All five local manifests
+were checked against the benchmark's test metadata: each selects four held-out
+tasks with episode IDs 0..49 available.
+
+For a single-episode smoke run, replace `--num-episodes 50` with
+`--episode-indices 0` and add e.g. `--tasks PickXtimes`, using a fresh output
+directory. `--tasks` accepts only a subset of the manifest's excluded tasks;
+training tasks are rejected. `--episode-indices` also supports non-contiguous
+selections. `--exec-horizon` can be 1..16 and determines how many predicted
+actions execute before replanning; episode termination stops a chunk immediately.
+The execution budget excludes the initial demo prefix. Use `--no-video` to
+disable recording; the default video FPS is 10.
+
+The checkpoint string is a **declared identity** for the remote server; the
+current GR00T HTTP API does not expose its loaded checkpoint or verify its
+relationship to a dataset manifest. Use the matching manifest/checkpoint pair.
+`--seed` seeds local Python, NumPy and Torch; the server's sampling seed is set
+separately by its `--seed`. Environment episode seeds come from test metadata.
+
+Each run saves:
+
+```text
+config.json        # checkpoint identity, manifest/metadata hashes, protocol and endpoint
+progress.json      # task/episode, outcome, step count, error and video path
+metrics.json       # overall and per-task counts and success rates
+videos/            # streamed front+wrist MP4s, demo-prefix frames marked in red
+```
+
+Results distinguish success, fail, timeout and error. Success rates use **all
+attempted episodes**, including errors, as the denominator; pending episodes are
+listed through expected/completed counts. Environment and video resources are
+closed even when inference or stepping fails. Cleanup errors are logged
+separately. The command exits nonzero if any episode or resource cleanup failed.
+
+Fresh runs refuse an existing output directory. Add `--resume` with the same
+arguments/output directory to skip already recorded episodes, including recorded
+errors. Resume rejects changed configuration or manifest/test metadata hashes.
+It preserves results, but does not restore the remote model's sampling RNG;
+resumed runs are not guaranteed to match an uninterrupted stochastic rollout.
+
+Run CPU tests with the existing GR00T environment inside an allocation:
+
+```bash
+env PYTHONPATH=/mnt/data/vhoangth2/repos/Isaac-GR00T \
+    USE_TF=0 USE_FLAX=0 HF_HUB_OFFLINE=1 HF_DATASETS_OFFLINE=1 TRANSFORMERS_OFFLINE=1 \
+    NO_ALBUMENTATIONS_UPDATE=1 TOKENIZERS_PARALLELISM=false \
+    OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \
+    /home/vhoangth2/miniconda3/envs/gr00t/bin/python -m pytest -q \
+    tests/test_robomme_eval.py tests/test_robomme_adapter.py tests/test_robomme_data_config.py
+```
+
+The evaluation tests use fake environments/clients and include actual MP4
+encoding/decoding, early termination, replanning, queue reset, timeouts, structured
+simulator errors and interrupted-run resume. Real checkpoint inference and a
+real RoboMME episode remain for the GPU smoke step.
