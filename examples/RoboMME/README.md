@@ -381,3 +381,53 @@ The initial attempt stopped before step 1 because the environment imported
 `PYTHONPATH` as shown above resolved the mismatch without changing trainer code
 or reinstalling the environment. Resume execution and simulator rollouts have
 not been tested with this checkpoint.
+
+## Observation/action mapping (adapter step 1)
+
+`examples/RoboMME/adapter.py` provides two NumPy-only mapping functions. They
+follow the benchmark's buffered observation interface and the existing
+`RoboMMEDataConfig`. This step prepares the data boundary; server communication
+and the evaluation entry point are subsequent steps.
+
+```python
+from examples.RoboMME.adapter import to_gr00t_observation, to_robomme_actions
+
+# benchmark_inputs contains the four observation buffers and task_goal.
+observation = to_gr00t_observation(benchmark_inputs)
+# With an initialized Gr00tPolicy, later in the inference integration:
+prediction = policy.get_action(observation)
+actions = to_robomme_actions(prediction)  # float32 (H, 8), normally (16, 8)
+```
+
+The four buffers (`front_rgb_list`, `wrist_rgb_list`, `joint_state_list`,
+`gripper_state_list`) must have equal nonzero lengths. The mapping takes their
+last entries, including when the initial request contains a conditioning video.
+Front/wrist RGB arrays retain their uint8 HWC layout and gain a single time
+dimension. Seven joint positions become `state.joint_position` `(1, 7)`; the
+first of two physical finger positions becomes `state.gripper` `(1, 1)`.
+`task_goal[0]` is passed verbatim as the instruction (a single string is also
+accepted). History, oracle subgoals and other optional observations are not
+consumed by this current-observation baseline. Returned arrays are independent
+copies, so model preprocessing cannot modify simulator buffers.
+
+`to_robomme_actions` expects the unbatched **physical** output fields from
+`Gr00tPolicy.get_action`: `action.joint_position` `(H, 7)` and `action.gripper`
+`(H, 1)`. It preserves absolute joint targets and the predicted gripper command
+values in their learned -1/+1 scale, without another inverse normalization,
+threshold or delta conversion. The existing benchmark wrapper drops the gripper
+dimension for PatternLock/RouteStick. Image preprocessing and normalization use
+the existing GR00T transforms and checkpoint metadata. Invalid shapes, empty or
+unaligned buffers, and non-finite state/action values are rejected.
+
+Run mapping and transform integration checks **inside a CPU allocation**:
+
+```bash
+env PYTHONPATH=/mnt/data/vhoangth2/repos/Isaac-GR00T \
+    USE_TF=0 USE_FLAX=0 HF_HUB_OFFLINE=1 HF_DATASETS_OFFLINE=1 TRANSFORMERS_OFFLINE=1 \
+    NO_ALBUMENTATIONS_UPDATE=1 TOKENIZERS_PARALLELISM=false \
+    OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \
+    /home/vhoangth2/miniconda3/envs/gr00t/bin/python -m pytest -q \
+    tests/test_robomme_adapter.py tests/test_robomme_data_config.py
+```
+
+These checks need no simulator, checkpoint weights, network connection or GPU.
