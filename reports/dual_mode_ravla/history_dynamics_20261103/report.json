@@ -1,0 +1,1063 @@
+{
+  "status": "completed",
+  "policy_training_started": false,
+  "variants": {
+    "0": {
+      "history_steps": 0,
+      "input_dim": 120,
+      "ready_for_endpoint": false,
+      "selected": null,
+      "evaluation": {
+        "calibration": {
+          "windows": 1908,
+          "unfiltered": {
+            "mean_m": 0.0108663636962223,
+            "median_m": 0.006545085459947586,
+            "p95_m": 0.03565925676375627,
+            "max_m": 0.10822903364896774
+          },
+          "per_task_unfiltered": [
+            {
+              "dataset": 0,
+              "mean_m": 0.012164208105024957,
+              "median_m": 0.008158225566148758,
+              "p95_m": 0.03488911464810372,
+              "max_m": 0.06875047832727432
+            },
+            {
+              "dataset": 1,
+              "mean_m": 0.008795570126228012,
+              "median_m": 0.004726070910692215,
+              "p95_m": 0.03588839583098888,
+              "max_m": 0.07005861401557922
+            },
+            {
+              "dataset": 2,
+              "mean_m": 0.012629139121495239,
+              "median_m": 0.00880542304366827,
+              "p95_m": 0.03436139356344937,
+              "max_m": 0.10822903364896774
+            }
+          ],
+          "filtered": {
+            "passed": false,
+            "per_task": [
+              {
+                "dataset": 0,
+                "total": 679,
+                "accepted": 0,
+                "coverage": 0.0,
+                "episodes": 0,
+                "mean_m": null,
+                "p95_m": null,
+                "passed": false
+              },
+              {
+                "dataset": 1,
+                "total": 795,
+                "accepted": 0,
+                "coverage": 0.0,
+                "episodes": 0,
+                "mean_m": null,
+                "p95_m": null,
+                "passed": false
+              },
+              {
+                "dataset": 2,
+                "total": 434,
+                "accepted": 0,
+                "coverage": 0.0,
+                "episodes": 0,
+                "mean_m": null,
+                "p95_m": null,
+                "passed": false
+              }
+            ],
+            "coverage": 0.0,
+            "accepted": 0,
+            "mean_m": null,
+            "p95_m": null
+          },
+          "spread_error_spearman": 0.5467566926058479,
+          "distance_error_spearman": 0.5463069329644689
+        },
+        "test": {
+          "windows": 1986,
+          "unfiltered": {
+            "mean_m": 0.010296780049077175,
+            "median_m": 0.006049639778211713,
+            "p95_m": 0.03273392003029585,
+            "max_m": 0.06590601801872253
+          },
+          "per_task_unfiltered": [
+            {
+              "dataset": 0,
+              "mean_m": 0.010709187822541343,
+              "median_m": 0.006049639778211713,
+              "p95_m": 0.034210136160254395,
+              "max_m": 0.06590601801872253
+            },
+            {
+              "dataset": 1,
+              "mean_m": 0.0090815519059748,
+              "median_m": 0.004636216443032026,
+              "p95_m": 0.03270457610487936,
+              "max_m": 0.06499141454696655
+            },
+            {
+              "dataset": 2,
+              "mean_m": 0.012040434735234088,
+              "median_m": 0.00926558393985033,
+              "p95_m": 0.03201607558876275,
+              "max_m": 0.06293349713087082
+            }
+          ],
+          "filtered": {
+            "passed": false,
+            "per_task": [
+              {
+                "dataset": 0,
+                "total": 712,
+                "accepted": 0,
+                "coverage": 0.0,
+                "episodes": 0,
+                "mean_m": null,
+                "p95_m": null,
+                "passed": false
+              },
+              {
+                "dataset": 1,
+                "total": 850,
+                "accepted": 0,
+                "coverage": 0.0,
+                "episodes": 0,
+                "mean_m": null,
+                "p95_m": null,
+                "passed": false
+              },
+              {
+                "dataset": 2,
+                "total": 424,
+                "accepted": 0,
+                "coverage": 0.0,
+                "episodes": 0,
+                "mean_m": null,
+                "p95_m": null,
+                "passed": false
+              }
+            ],
+            "coverage": 0.0,
+            "accepted": 0,
+            "mean_m": null,
+            "p95_m": null
+          },
+          "spread_error_spearman": 0.578596282626666,
+          "distance_error_spearman": 0.5460484197992008
+        },
+        "audit": {
+          "windows": 958,
+          "unfiltered": {
+            "mean_m": 0.00998777272086153,
+            "median_m": 0.006812719628214836,
+            "p95_m": 0.029271405655890696,
+            "max_m": 0.0686795562505722
+          },
+          "per_task_unfiltered": [
+            {
+              "dataset": 0,
+              "mean_m": 0.012819341276898174,
+              "median_m": 0.008847789838910103,
+              "p95_m": 0.03858396932482717,
+              "max_m": 0.0686795562505722
+            },
+            {
+              "dataset": 1,
+              "mean_m": 0.007585935325041646,
+              "median_m": 0.0058342094998806715,
+              "p95_m": 0.018980593699961888,
+              "max_m": 0.0422268845140934
+            },
+            {
+              "dataset": 2,
+              "mean_m": 0.010066984406051537,
+              "median_m": 0.007205766160041094,
+              "p95_m": 0.025562512874603267,
+              "max_m": 0.04272269830107689
+            }
+          ],
+          "filtered": {
+            "passed": false,
+            "per_task": [
+              {
+                "dataset": 0,
+                "total": 333,
+                "accepted": 0,
+                "coverage": 0.0,
+                "episodes": 0,
+                "mean_m": null,
+                "p95_m": null,
+                "passed": false
+              },
+              {
+                "dataset": 1,
+                "total": 400,
+                "accepted": 0,
+                "coverage": 0.0,
+                "episodes": 0,
+                "mean_m": null,
+                "p95_m": null,
+                "passed": false
+              },
+              {
+                "dataset": 2,
+                "total": 225,
+                "accepted": 0,
+                "coverage": 0.0,
+                "episodes": 0,
+                "mean_m": null,
+                "p95_m": null,
+                "passed": false
+              }
+            ],
+            "coverage": 0.0,
+            "accepted": 0,
+            "mean_m": null,
+            "p95_m": null
+          },
+          "spread_error_spearman": 0.514453166470673,
+          "distance_error_spearman": 0.4796344975849954
+        }
+      },
+      "observed_policy_errors": [
+        {
+          "case": "libero_goal_task00_init000",
+          "mode": "action",
+          "error_m": 0.0037365497555583715,
+          "spread_m": 0.0021683569066226482,
+          "distance": 0.09033434092998505,
+          "accepted": false
+        },
+        {
+          "case": "libero_goal_task00_init001",
+          "mode": "action",
+          "error_m": 0.005140446126461029,
+          "spread_m": 0.00208638166077435,
+          "distance": 0.07899345457553864,
+          "accepted": false
+        },
+        {
+          "case": "libero_goal_task00_init002",
+          "mode": "action",
+          "error_m": 0.004468466620892286,
+          "spread_m": 0.0009916024282574654,
+          "distance": 0.04145137593150139,
+          "accepted": false
+        },
+        {
+          "case": "libero_object_task00_init000",
+          "mode": "action",
+          "error_m": 0.003368633333593607,
+          "spread_m": 0.002719353185966611,
+          "distance": 0.040242038667201996,
+          "accepted": false
+        },
+        {
+          "case": "libero_object_task00_init001",
+          "mode": "action",
+          "error_m": 0.0014692791737616062,
+          "spread_m": 0.002988357562571764,
+          "distance": 0.31708648800849915,
+          "accepted": false
+        },
+        {
+          "case": "libero_object_task00_init002",
+          "mode": "action",
+          "error_m": 0.0010843839263543487,
+          "spread_m": 0.0016376589192077518,
+          "distance": 0.03005129098892212,
+          "accepted": false
+        },
+        {
+          "case": "libero_goal_task00_init000",
+          "mode": "goal",
+          "error_m": 0.0028958148322999477,
+          "spread_m": 0.0046883453615009785,
+          "distance": 0.47310203313827515,
+          "accepted": false
+        },
+        {
+          "case": "libero_goal_task00_init001",
+          "mode": "goal",
+          "error_m": 0.002081741578876972,
+          "spread_m": 0.0026822914369404316,
+          "distance": 0.5563194751739502,
+          "accepted": false
+        },
+        {
+          "case": "libero_goal_task00_init002",
+          "mode": "goal",
+          "error_m": 0.010231729596853256,
+          "spread_m": 0.0061298212967813015,
+          "distance": 0.4475705027580261,
+          "accepted": false
+        },
+        {
+          "case": "libero_object_task00_init000",
+          "mode": "goal",
+          "error_m": 0.009660832583904266,
+          "spread_m": 0.0021783430129289627,
+          "distance": 0.32413139939308167,
+          "accepted": false
+        },
+        {
+          "case": "libero_object_task00_init001",
+          "mode": "goal",
+          "error_m": 0.006919196341186762,
+          "spread_m": 0.0021434472873806953,
+          "distance": 0.2775058150291443,
+          "accepted": false
+        },
+        {
+          "case": "libero_object_task00_init002",
+          "mode": "goal",
+          "error_m": 0.002739601070061326,
+          "spread_m": 0.0026549731846898794,
+          "distance": 0.34912896156311035,
+          "accepted": false
+        }
+      ],
+      "goal_policy_prediction_error": {
+        "mean_m": 0.005754819333863755,
+        "median_m": 0.004907505586743355,
+        "p95_m": 0.010089005343616009,
+        "max_m": 0.010231729596853256
+      },
+      "fit_epochs": 100,
+      "hidden": [
+        128,
+        128
+      ],
+      "ensemble": 3,
+      "criteria": {
+        "max_mean": 0.005,
+        "max_p95": 0.01,
+        "min_coverage": 0.1,
+        "min_windows": 32,
+        "min_episodes": 2
+      }
+    },
+    "4": {
+      "history_steps": 4,
+      "input_dim": 180,
+      "ready_for_endpoint": false,
+      "selected": null,
+      "evaluation": {
+        "calibration": {
+          "windows": 1908,
+          "unfiltered": {
+            "mean_m": 0.009454591708691363,
+            "median_m": 0.005165910581126809,
+            "p95_m": 0.03263289257884021,
+            "max_m": 0.08389610797166824
+          },
+          "per_task_unfiltered": [
+            {
+              "dataset": 0,
+              "mean_m": 0.011706611475463551,
+              "median_m": 0.00748339481651783,
+              "p95_m": 0.03970243521034718,
+              "max_m": 0.06157774478197098
+            },
+            {
+              "dataset": 1,
+              "mean_m": 0.007377055223625586,
+              "median_m": 0.003923146519809961,
+              "p95_m": 0.030012340843677477,
+              "max_m": 0.07608917355537415
+            },
+            {
+              "dataset": 2,
+              "mean_m": 0.009736896049679785,
+              "median_m": 0.0067884589079767466,
+              "p95_m": 0.0256902485154569,
+              "max_m": 0.08389610797166824
+            }
+          ],
+          "filtered": {
+            "passed": false,
+            "per_task": [
+              {
+                "dataset": 0,
+                "total": 679,
+                "accepted": 0,
+                "coverage": 0.0,
+                "episodes": 0,
+                "mean_m": null,
+                "p95_m": null,
+                "passed": false
+              },
+              {
+                "dataset": 1,
+                "total": 795,
+                "accepted": 0,
+                "coverage": 0.0,
+                "episodes": 0,
+                "mean_m": null,
+                "p95_m": null,
+                "passed": false
+              },
+              {
+                "dataset": 2,
+                "total": 434,
+                "accepted": 0,
+                "coverage": 0.0,
+                "episodes": 0,
+                "mean_m": null,
+                "p95_m": null,
+                "passed": false
+              }
+            ],
+            "coverage": 0.0,
+            "accepted": 0,
+            "mean_m": null,
+            "p95_m": null
+          },
+          "spread_error_spearman": 0.5976376627758994,
+          "distance_error_spearman": 0.580709798339166
+        },
+        "test": {
+          "windows": 1986,
+          "unfiltered": {
+            "mean_m": 0.00970034538960792,
+            "median_m": 0.005411037243902683,
+            "p95_m": 0.03250443655997515,
+            "max_m": 0.06874494254589081
+          },
+          "per_task_unfiltered": [
+            {
+              "dataset": 0,
+              "mean_m": 0.010335166215994056,
+              "median_m": 0.005602461053058505,
+              "p95_m": 0.03647969197481861,
+              "max_m": 0.06874494254589081
+            },
+            {
+              "dataset": 1,
+              "mean_m": 0.008347030007177689,
+              "median_m": 0.0041987181175500154,
+              "p95_m": 0.029574682749807825,
+              "max_m": 0.06055525690317154
+            },
+            {
+              "dataset": 2,
+              "mean_m": 0.011347339839321992,
+              "median_m": 0.008654230739921331,
+              "p95_m": 0.03484721556305883,
+              "max_m": 0.05277008190751076
+            }
+          ],
+          "filtered": {
+            "passed": false,
+            "per_task": [
+              {
+                "dataset": 0,
+                "total": 712,
+                "accepted": 0,
+                "coverage": 0.0,
+                "episodes": 0,
+                "mean_m": null,
+                "p95_m": null,
+                "passed": false
+              },
+              {
+                "dataset": 1,
+                "total": 850,
+                "accepted": 0,
+                "coverage": 0.0,
+                "episodes": 0,
+                "mean_m": null,
+                "p95_m": null,
+                "passed": false
+              },
+              {
+                "dataset": 2,
+                "total": 424,
+                "accepted": 0,
+                "coverage": 0.0,
+                "episodes": 0,
+                "mean_m": null,
+                "p95_m": null,
+                "passed": false
+              }
+            ],
+            "coverage": 0.0,
+            "accepted": 0,
+            "mean_m": null,
+            "p95_m": null
+          },
+          "spread_error_spearman": 0.644963942171023,
+          "distance_error_spearman": 0.5811756302884974
+        },
+        "audit": {
+          "windows": 958,
+          "unfiltered": {
+            "mean_m": 0.008588730512038146,
+            "median_m": 0.00513677392154932,
+            "p95_m": 0.025503989960998293,
+            "max_m": 0.06380295753479004
+          },
+          "per_task_unfiltered": [
+            {
+              "dataset": 0,
+              "mean_m": 0.011827005019066044,
+              "median_m": 0.009284730069339275,
+              "p95_m": 0.0330740638077259,
+              "max_m": 0.06380295753479004
+            },
+            {
+              "dataset": 1,
+              "mean_m": 0.005834640357061289,
+              "median_m": 0.004080216167494655,
+              "p95_m": 0.018586573656648373,
+              "max_m": 0.03274313732981682
+            },
+            {
+              "dataset": 2,
+              "mean_m": 0.008692244517151266,
+              "median_m": 0.006207912694662809,
+              "p95_m": 0.022824922204017634,
+              "max_m": 0.0290436502546072
+            }
+          ],
+          "filtered": {
+            "passed": false,
+            "per_task": [
+              {
+                "dataset": 0,
+                "total": 333,
+                "accepted": 0,
+                "coverage": 0.0,
+                "episodes": 0,
+                "mean_m": null,
+                "p95_m": null,
+                "passed": false
+              },
+              {
+                "dataset": 1,
+                "total": 400,
+                "accepted": 0,
+                "coverage": 0.0,
+                "episodes": 0,
+                "mean_m": null,
+                "p95_m": null,
+                "passed": false
+              },
+              {
+                "dataset": 2,
+                "total": 225,
+                "accepted": 0,
+                "coverage": 0.0,
+                "episodes": 0,
+                "mean_m": null,
+                "p95_m": null,
+                "passed": false
+              }
+            ],
+            "coverage": 0.0,
+            "accepted": 0,
+            "mean_m": null,
+            "p95_m": null
+          },
+          "spread_error_spearman": 0.591266371326138,
+          "distance_error_spearman": 0.5502355019418791
+        }
+      },
+      "observed_policy_errors": [
+        {
+          "case": "libero_goal_task00_init000",
+          "mode": "action",
+          "error_m": 0.0024406586308032274,
+          "spread_m": 0.002885123249143362,
+          "distance": 0.14109008014202118,
+          "accepted": false
+        },
+        {
+          "case": "libero_goal_task00_init001",
+          "mode": "action",
+          "error_m": 0.00883289985358715,
+          "spread_m": 0.0030448457691818476,
+          "distance": 0.4627709984779358,
+          "accepted": false
+        },
+        {
+          "case": "libero_goal_task00_init002",
+          "mode": "action",
+          "error_m": 0.0029406212270259857,
+          "spread_m": 0.0032251770608127117,
+          "distance": 0.24491648375988007,
+          "accepted": false
+        },
+        {
+          "case": "libero_object_task00_init000",
+          "mode": "action",
+          "error_m": 0.0009734542691148818,
+          "spread_m": 0.0015221176436170936,
+          "distance": 0.03590968996286392,
+          "accepted": false
+        },
+        {
+          "case": "libero_object_task00_init001",
+          "mode": "action",
+          "error_m": 0.0028794994577765465,
+          "spread_m": 0.001063868054188788,
+          "distance": 0.3303951025009155,
+          "accepted": false
+        },
+        {
+          "case": "libero_object_task00_init002",
+          "mode": "action",
+          "error_m": 0.0007444345974363387,
+          "spread_m": 0.0019672417547553778,
+          "distance": 0.03281658515334129,
+          "accepted": false
+        },
+        {
+          "case": "libero_goal_task00_init000",
+          "mode": "goal",
+          "error_m": 0.018720855936408043,
+          "spread_m": 0.004631664138287306,
+          "distance": 0.5604251623153687,
+          "accepted": false
+        },
+        {
+          "case": "libero_goal_task00_init001",
+          "mode": "goal",
+          "error_m": 0.01211492158472538,
+          "spread_m": 0.0038992457557469606,
+          "distance": 0.5834702849388123,
+          "accepted": false
+        },
+        {
+          "case": "libero_goal_task00_init002",
+          "mode": "goal",
+          "error_m": 0.0029194552917033434,
+          "spread_m": 0.003408476011827588,
+          "distance": 0.6181511878967285,
+          "accepted": false
+        },
+        {
+          "case": "libero_object_task00_init000",
+          "mode": "goal",
+          "error_m": 0.004735920578241348,
+          "spread_m": 0.0031291174236685038,
+          "distance": 0.3491517901420593,
+          "accepted": false
+        },
+        {
+          "case": "libero_object_task00_init001",
+          "mode": "goal",
+          "error_m": 0.0024080199655145407,
+          "spread_m": 0.0027124553453177214,
+          "distance": 0.27805987000465393,
+          "accepted": false
+        },
+        {
+          "case": "libero_object_task00_init002",
+          "mode": "goal",
+          "error_m": 0.003001390490680933,
+          "spread_m": 0.0023697111755609512,
+          "distance": 0.44128066301345825,
+          "accepted": false
+        }
+      ],
+      "goal_policy_prediction_error": {
+        "mean_m": 0.007316760641212265,
+        "median_m": 0.0038686555344611406,
+        "p95_m": 0.017069372348487377,
+        "max_m": 0.018720855936408043
+      },
+      "fit_epochs": 100,
+      "hidden": [
+        128,
+        128
+      ],
+      "ensemble": 3,
+      "criteria": {
+        "max_mean": 0.005,
+        "max_p95": 0.01,
+        "min_coverage": 0.1,
+        "min_windows": 32,
+        "min_episodes": 2
+      }
+    },
+    "8": {
+      "history_steps": 8,
+      "input_dim": 240,
+      "ready_for_endpoint": false,
+      "selected": null,
+      "evaluation": {
+        "calibration": {
+          "windows": 1908,
+          "unfiltered": {
+            "mean_m": 0.009505209821420727,
+            "median_m": 0.005411430727690458,
+            "p95_m": 0.03188015744090075,
+            "max_m": 0.08924184739589691
+          },
+          "per_task_unfiltered": [
+            {
+              "dataset": 0,
+              "mean_m": 0.011986204729929315,
+              "median_m": 0.008136291056871414,
+              "p95_m": 0.03863910026848317,
+              "max_m": 0.062082383781671524
+            },
+            {
+              "dataset": 1,
+              "mean_m": 0.007590094923426883,
+              "median_m": 0.004091313574463129,
+              "p95_m": 0.029217877238988874,
+              "max_m": 0.06889630109071732
+            },
+            {
+              "dataset": 2,
+              "mean_m": 0.009131755445908685,
+              "median_m": 0.006609140895307064,
+              "p95_m": 0.021976396534591894,
+              "max_m": 0.08924184739589691
+            }
+          ],
+          "filtered": {
+            "passed": false,
+            "per_task": [
+              {
+                "dataset": 0,
+                "total": 679,
+                "accepted": 0,
+                "coverage": 0.0,
+                "episodes": 0,
+                "mean_m": null,
+                "p95_m": null,
+                "passed": false
+              },
+              {
+                "dataset": 1,
+                "total": 795,
+                "accepted": 0,
+                "coverage": 0.0,
+                "episodes": 0,
+                "mean_m": null,
+                "p95_m": null,
+                "passed": false
+              },
+              {
+                "dataset": 2,
+                "total": 434,
+                "accepted": 0,
+                "coverage": 0.0,
+                "episodes": 0,
+                "mean_m": null,
+                "p95_m": null,
+                "passed": false
+              }
+            ],
+            "coverage": 0.0,
+            "accepted": 0,
+            "mean_m": null,
+            "p95_m": null
+          },
+          "spread_error_spearman": 0.5734087659252175,
+          "distance_error_spearman": 0.5248817243453227
+        },
+        "test": {
+          "windows": 1986,
+          "unfiltered": {
+            "mean_m": 0.009537708816143861,
+            "median_m": 0.005403351271525025,
+            "p95_m": 0.03185243345797062,
+            "max_m": 0.07566270232200623
+          },
+          "per_task_unfiltered": [
+            {
+              "dataset": 0,
+              "mean_m": 0.010162091034227784,
+              "median_m": 0.005610298831015825,
+              "p95_m": 0.03368765506893395,
+              "max_m": 0.07566270232200623
+            },
+            {
+              "dataset": 1,
+              "mean_m": 0.008597723747850122,
+              "median_m": 0.004019823856651783,
+              "p95_m": 0.03063573017716408,
+              "max_m": 0.0649060532450676
+            },
+            {
+              "dataset": 2,
+              "mean_m": 0.010373621950044631,
+              "median_m": 0.007843778934329748,
+              "p95_m": 0.028103019576519703,
+              "max_m": 0.04613521695137024
+            }
+          ],
+          "filtered": {
+            "passed": false,
+            "per_task": [
+              {
+                "dataset": 0,
+                "total": 712,
+                "accepted": 0,
+                "coverage": 0.0,
+                "episodes": 0,
+                "mean_m": null,
+                "p95_m": null,
+                "passed": false
+              },
+              {
+                "dataset": 1,
+                "total": 850,
+                "accepted": 0,
+                "coverage": 0.0,
+                "episodes": 0,
+                "mean_m": null,
+                "p95_m": null,
+                "passed": false
+              },
+              {
+                "dataset": 2,
+                "total": 424,
+                "accepted": 0,
+                "coverage": 0.0,
+                "episodes": 0,
+                "mean_m": null,
+                "p95_m": null,
+                "passed": false
+              }
+            ],
+            "coverage": 0.0,
+            "accepted": 0,
+            "mean_m": null,
+            "p95_m": null
+          },
+          "spread_error_spearman": 0.6140826181628988,
+          "distance_error_spearman": 0.5807661348377487
+        },
+        "audit": {
+          "windows": 958,
+          "unfiltered": {
+            "mean_m": 0.008553111426140856,
+            "median_m": 0.005306712118908763,
+            "p95_m": 0.02618921706452965,
+            "max_m": 0.05297941714525223
+          },
+          "per_task_unfiltered": [
+            {
+              "dataset": 0,
+              "mean_m": 0.011765740752393554,
+              "median_m": 0.008800402283668518,
+              "p95_m": 0.033391480892896626,
+              "max_m": 0.05297941714525223
+            },
+            {
+              "dataset": 1,
+              "mean_m": 0.005735611888230779,
+              "median_m": 0.0037650713929906487,
+              "p95_m": 0.016732478141784652,
+              "max_m": 0.024654965847730637
+            },
+            {
+              "dataset": 2,
+              "mean_m": 0.008807308090682555,
+              "median_m": 0.006348750554025173,
+              "p95_m": 0.025764768570661543,
+              "max_m": 0.0293575432151556
+            }
+          ],
+          "filtered": {
+            "passed": false,
+            "per_task": [
+              {
+                "dataset": 0,
+                "total": 333,
+                "accepted": 0,
+                "coverage": 0.0,
+                "episodes": 0,
+                "mean_m": null,
+                "p95_m": null,
+                "passed": false
+              },
+              {
+                "dataset": 1,
+                "total": 400,
+                "accepted": 0,
+                "coverage": 0.0,
+                "episodes": 0,
+                "mean_m": null,
+                "p95_m": null,
+                "passed": false
+              },
+              {
+                "dataset": 2,
+                "total": 225,
+                "accepted": 0,
+                "coverage": 0.0,
+                "episodes": 0,
+                "mean_m": null,
+                "p95_m": null,
+                "passed": false
+              }
+            ],
+            "coverage": 0.0,
+            "accepted": 0,
+            "mean_m": null,
+            "p95_m": null
+          },
+          "spread_error_spearman": 0.5546819539605921,
+          "distance_error_spearman": 0.603819873564449
+        }
+      },
+      "observed_policy_errors": [
+        {
+          "case": "libero_goal_task00_init000",
+          "mode": "action",
+          "error_m": 0.0023314920254051685,
+          "spread_m": 0.0031934960279613733,
+          "distance": 0.1661539524793625,
+          "accepted": false
+        },
+        {
+          "case": "libero_goal_task00_init001",
+          "mode": "action",
+          "error_m": 0.006664086598902941,
+          "spread_m": 0.004642399959266186,
+          "distance": 0.44080883264541626,
+          "accepted": false
+        },
+        {
+          "case": "libero_goal_task00_init002",
+          "mode": "action",
+          "error_m": 0.006626577116549015,
+          "spread_m": 0.002994173439219594,
+          "distance": 0.27564069628715515,
+          "accepted": false
+        },
+        {
+          "case": "libero_object_task00_init000",
+          "mode": "action",
+          "error_m": 0.0016535407630726695,
+          "spread_m": 0.001165688270702958,
+          "distance": 0.03400116786360741,
+          "accepted": false
+        },
+        {
+          "case": "libero_object_task00_init001",
+          "mode": "action",
+          "error_m": 0.0033049792982637882,
+          "spread_m": 0.0028823388274759054,
+          "distance": 0.30193784832954407,
+          "accepted": false
+        },
+        {
+          "case": "libero_object_task00_init002",
+          "mode": "action",
+          "error_m": 0.002669800305739045,
+          "spread_m": 0.002420868258923292,
+          "distance": 0.08223345130681992,
+          "accepted": false
+        },
+        {
+          "case": "libero_goal_task00_init000",
+          "mode": "goal",
+          "error_m": 0.008657608181238174,
+          "spread_m": 0.0070326062850654125,
+          "distance": 0.6086171269416809,
+          "accepted": false
+        },
+        {
+          "case": "libero_goal_task00_init001",
+          "mode": "goal",
+          "error_m": 0.009786628186702728,
+          "spread_m": 0.003948888275772333,
+          "distance": 0.5578286051750183,
+          "accepted": false
+        },
+        {
+          "case": "libero_goal_task00_init002",
+          "mode": "goal",
+          "error_m": 0.0015950811794027686,
+          "spread_m": 0.004463815595954657,
+          "distance": 0.6225816011428833,
+          "accepted": false
+        },
+        {
+          "case": "libero_object_task00_init000",
+          "mode": "goal",
+          "error_m": 0.0014170078793540597,
+          "spread_m": 0.0020219050347805023,
+          "distance": 0.30611491203308105,
+          "accepted": false
+        },
+        {
+          "case": "libero_object_task00_init001",
+          "mode": "goal",
+          "error_m": 0.0013986449921503663,
+          "spread_m": 0.0026035814080387354,
+          "distance": 0.359437495470047,
+          "accepted": false
+        },
+        {
+          "case": "libero_object_task00_init002",
+          "mode": "goal",
+          "error_m": 0.0062472205609083176,
+          "spread_m": 0.00538328243419528,
+          "distance": 0.4443478286266327,
+          "accepted": false
+        }
+      ],
+      "goal_policy_prediction_error": {
+        "mean_m": 0.004850365163292736,
+        "median_m": 0.003921150870155543,
+        "p95_m": 0.00950437318533659,
+        "max_m": 0.009786628186702728
+      },
+      "fit_epochs": 100,
+      "hidden": [
+        128,
+        128
+      ],
+      "ensemble": 3,
+      "criteria": {
+        "max_mean": 0.005,
+        "max_p95": 0.01,
+        "min_coverage": 0.1,
+        "min_windows": 32,
+        "min_episodes": 2
+      }
+    }
+  },
+  "split_counts": {
+    "train": {
+      "windows": 9353,
+      "episodes": 87
+    },
+    "calibration": {
+      "windows": 1908,
+      "episodes": 18
+    },
+    "test": {
+      "windows": 1986,
+      "episodes": 18
+    },
+    "audit": {
+      "windows": 958,
+      "episodes": 9
+    }
+  },
+  "caveats": [
+    "This is a dynamics diagnosis, not a policy recovery experiment.",
+    "Identical t>=8 windows for all variants; no history padding or episode crossing.",
+    "This test split was inspected in the preceding study; results are development evidence.",
+    "Variant/grid definitions fixed before this run; filter thresholds use calibration only.",
+    "Passing prediction-error gates does not validate counterfactual action gradients."
+  ]
+}

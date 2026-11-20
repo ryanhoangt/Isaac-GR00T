@@ -1,0 +1,1553 @@
+{
+  "selected": null,
+  "candidates": [
+    {
+      "std_quantile": 0.1,
+      "distance_quantile": 0.1,
+      "std_limit_m": 0.0019037494901567697,
+      "distance_limit": 0.2394370347261429,
+      "passed": false,
+      "per_task": [
+        {
+          "dataset": 0,
+          "total": 727,
+          "accepted": 10,
+          "coverage": 0.013755158184319119,
+          "episodes": 1,
+          "mean_m": 0.0049133384600281715,
+          "p95_m": 0.009258211776614183,
+          "passed": false
+        },
+        {
+          "dataset": 1,
+          "total": 843,
+          "accepted": 89,
+          "coverage": 0.1055753262158956,
+          "episodes": 6,
+          "mean_m": 0.0027354212943464518,
+          "p95_m": 0.004838585108518598,
+          "passed": true
+        },
+        {
+          "dataset": 2,
+          "total": 482,
+          "accepted": 3,
+          "coverage": 0.006224066390041493,
+          "episodes": 2,
+          "mean_m": 0.0022973737213760614,
+          "p95_m": 0.00416061757132411,
+          "passed": false
+        }
+      ],
+      "coverage": 0.049707602339181284,
+      "accepted": 102,
+      "mean_m": 0.0029360586777329445,
+      "p95_m": 0.005743053881451487
+    },
+    {
+      "std_quantile": 0.1,
+      "distance_quantile": 0.2,
+      "std_limit_m": 0.0019037494901567697,
+      "distance_limit": 0.2845667898654938,
+      "passed": false,
+      "per_task": [
+        {
+          "dataset": 0,
+          "total": 727,
+          "accepted": 16,
+          "coverage": 0.02200825309491059,
+          "episodes": 2,
+          "mean_m": 0.005189527757465839,
+          "p95_m": 0.00913653476163745,
+          "passed": false
+        },
+        {
+          "dataset": 1,
+          "total": 843,
+          "accepted": 113,
+          "coverage": 0.13404507710557534,
+          "episodes": 6,
+          "mean_m": 0.0027115866541862488,
+          "p95_m": 0.005009828135371207,
+          "passed": true
+        },
+        {
+          "dataset": 2,
+          "total": 482,
+          "accepted": 3,
+          "coverage": 0.006224066390041493,
+          "episodes": 2,
+          "mean_m": 0.0022973737213760614,
+          "p95_m": 0.00416061757132411,
+          "passed": false
+        }
+      ],
+      "coverage": 0.06432748538011696,
+      "accepted": 132,
+      "mean_m": 0.003002529265359044,
+      "p95_m": 0.0062698788242414585
+    },
+    {
+      "std_quantile": 0.1,
+      "distance_quantile": 0.4,
+      "std_limit_m": 0.0019037494901567697,
+      "distance_limit": 0.35584484934806826,
+      "passed": false,
+      "per_task": [
+        {
+          "dataset": 0,
+          "total": 727,
+          "accepted": 32,
+          "coverage": 0.04401650618982118,
+          "episodes": 6,
+          "mean_m": 0.005704337731003761,
+          "p95_m": 0.013105888804420828,
+          "passed": false
+        },
+        {
+          "dataset": 1,
+          "total": 843,
+          "accepted": 139,
+          "coverage": 0.16488730723606168,
+          "episodes": 6,
+          "mean_m": 0.0028081322088837624,
+          "p95_m": 0.005652597034350037,
+          "passed": true
+        },
+        {
+          "dataset": 2,
+          "total": 482,
+          "accepted": 3,
+          "coverage": 0.006224066390041493,
+          "episodes": 2,
+          "mean_m": 0.0022973737213760614,
+          "p95_m": 0.00416061757132411,
+          "passed": false
+        }
+      ],
+      "coverage": 0.0847953216374269,
+      "accepted": 174,
+      "mean_m": 0.003331961343064904,
+      "p95_m": 0.006370987044647336
+    },
+    {
+      "std_quantile": 0.1,
+      "distance_quantile": 0.6,
+      "std_limit_m": 0.0019037494901567697,
+      "distance_limit": 0.42409995198249817,
+      "passed": false,
+      "per_task": [
+        {
+          "dataset": 0,
+          "total": 727,
+          "accepted": 42,
+          "coverage": 0.0577716643741403,
+          "episodes": 6,
+          "mean_m": 0.006163860205560923,
+          "p95_m": 0.013447521673515437,
+          "passed": false
+        },
+        {
+          "dataset": 1,
+          "total": 843,
+          "accepted": 146,
+          "coverage": 0.17319098457888493,
+          "episodes": 6,
+          "mean_m": 0.002880129963159561,
+          "p95_m": 0.00574569427408278,
+          "passed": true
+        },
+        {
+          "dataset": 2,
+          "total": 482,
+          "accepted": 6,
+          "coverage": 0.012448132780082987,
+          "episodes": 5,
+          "mean_m": 0.003771102288737893,
+          "p95_m": 0.005746008246205747,
+          "passed": false
+        }
+      ],
+      "coverage": 0.09454191033138401,
+      "accepted": 194,
+      "mean_m": 0.0036185968201607466,
+      "p95_m": 0.007034479267895221
+    },
+    {
+      "std_quantile": 0.1,
+      "distance_quantile": 0.8,
+      "std_limit_m": 0.0019037494901567697,
+      "distance_limit": 0.531477987766266,
+      "passed": false,
+      "per_task": [
+        {
+          "dataset": 0,
+          "total": 727,
+          "accepted": 45,
+          "coverage": 0.061898211829436035,
+          "episodes": 6,
+          "mean_m": 0.006379232741892338,
+          "p95_m": 0.014348791725933549,
+          "passed": false
+        },
+        {
+          "dataset": 1,
+          "total": 843,
+          "accepted": 147,
+          "coverage": 0.17437722419928825,
+          "episodes": 6,
+          "mean_m": 0.0028810855001211166,
+          "p95_m": 0.005745679698884487,
+          "passed": true
+        },
+        {
+          "dataset": 2,
+          "total": 482,
+          "accepted": 14,
+          "coverage": 0.029045643153526972,
+          "episodes": 5,
+          "mean_m": 0.004275453742593527,
+          "p95_m": 0.006724470620974898,
+          "passed": false
+        }
+      ],
+      "coverage": 0.10038986354775828,
+      "accepted": 206,
+      "mean_m": 0.003740006824955344,
+      "p95_m": 0.007134374114684761
+    },
+    {
+      "std_quantile": 0.1,
+      "distance_quantile": 1.0,
+      "std_limit_m": 0.0019037494901567697,
+      "distance_limit": 1.2199641466140747,
+      "passed": false,
+      "per_task": [
+        {
+          "dataset": 0,
+          "total": 727,
+          "accepted": 45,
+          "coverage": 0.061898211829436035,
+          "episodes": 6,
+          "mean_m": 0.006379232741892338,
+          "p95_m": 0.014348791725933549,
+          "passed": false
+        },
+        {
+          "dataset": 1,
+          "total": 843,
+          "accepted": 147,
+          "coverage": 0.17437722419928825,
+          "episodes": 6,
+          "mean_m": 0.0028810855001211166,
+          "p95_m": 0.005745679698884487,
+          "passed": true
+        },
+        {
+          "dataset": 2,
+          "total": 482,
+          "accepted": 14,
+          "coverage": 0.029045643153526972,
+          "episodes": 5,
+          "mean_m": 0.004275453742593527,
+          "p95_m": 0.006724470620974898,
+          "passed": false
+        }
+      ],
+      "coverage": 0.10038986354775828,
+      "accepted": 206,
+      "mean_m": 0.003740006824955344,
+      "p95_m": 0.007134374114684761
+    },
+    {
+      "std_quantile": 0.2,
+      "distance_quantile": 0.1,
+      "std_limit_m": 0.00236586076207459,
+      "distance_limit": 0.2394370347261429,
+      "passed": false,
+      "per_task": [
+        {
+          "dataset": 0,
+          "total": 727,
+          "accepted": 25,
+          "coverage": 0.0343878954607978,
+          "episodes": 3,
+          "mean_m": 0.006384574808180332,
+          "p95_m": 0.022835057973861678,
+          "passed": false
+        },
+        {
+          "dataset": 1,
+          "total": 843,
+          "accepted": 120,
+          "coverage": 0.1423487544483986,
+          "episodes": 6,
+          "mean_m": 0.0029346304945647717,
+          "p95_m": 0.005647451686672866,
+          "passed": true
+        },
+        {
+          "dataset": 2,
+          "total": 482,
+          "accepted": 5,
+          "coverage": 0.01037344398340249,
+          "episodes": 2,
+          "mean_m": 0.0025384516920894384,
+          "p95_m": 0.004425319749861956,
+          "passed": false
+        }
+      ],
+      "coverage": 0.07309941520467836,
+      "accepted": 150,
+      "mean_m": 0.00349641521461308,
+      "p95_m": 0.0063142095459625125
+    },
+    {
+      "std_quantile": 0.2,
+      "distance_quantile": 0.2,
+      "std_limit_m": 0.00236586076207459,
+      "distance_limit": 0.2845667898654938,
+      "passed": false,
+      "per_task": [
+        {
+          "dataset": 0,
+          "total": 727,
+          "accepted": 53,
+          "coverage": 0.07290233837689133,
+          "episodes": 4,
+          "mean_m": 0.005355142056941986,
+          "p95_m": 0.020439846813678733,
+          "passed": false
+        },
+        {
+          "dataset": 1,
+          "total": 843,
+          "accepted": 161,
+          "coverage": 0.19098457888493475,
+          "episodes": 6,
+          "mean_m": 0.0028704057913273573,
+          "p95_m": 0.00564227718859911,
+          "passed": true
+        },
+        {
+          "dataset": 2,
+          "total": 482,
+          "accepted": 6,
+          "coverage": 0.012448132780082987,
+          "episodes": 2,
+          "mean_m": 0.002404656494036317,
+          "p95_m": 0.004419672768563032,
+          "passed": false
+        }
+      ],
+      "coverage": 0.10721247563352826,
+      "accepted": 220,
+      "mean_m": 0.0034562989603728056,
+      "p95_m": 0.006426328141242263
+    },
+    {
+      "std_quantile": 0.2,
+      "distance_quantile": 0.4,
+      "std_limit_m": 0.00236586076207459,
+      "distance_limit": 0.35584484934806826,
+      "passed": false,
+      "per_task": [
+        {
+          "dataset": 0,
+          "total": 727,
+          "accepted": 98,
+          "coverage": 0.13480055020632736,
+          "episodes": 6,
+          "mean_m": 0.00543218245729804,
+          "p95_m": 0.015087428502738446,
+          "passed": false
+        },
+        {
+          "dataset": 1,
+          "total": 843,
+          "accepted": 214,
+          "coverage": 0.2538552787663108,
+          "episodes": 6,
+          "mean_m": 0.002952277660369873,
+          "p95_m": 0.0058824160834774365,
+          "passed": true
+        },
+        {
+          "dataset": 2,
+          "total": 482,
+          "accepted": 9,
+          "coverage": 0.01867219917012448,
+          "episodes": 3,
+          "mean_m": 0.002668879460543394,
+          "p95_m": 0.0044027318246662615,
+          "passed": false
+        }
+      ],
+      "coverage": 0.1564327485380117,
+      "accepted": 321,
+      "mean_m": 0.0037014365661889315,
+      "p95_m": 0.007306806277483702
+    },
+    {
+      "std_quantile": 0.2,
+      "distance_quantile": 0.6,
+      "std_limit_m": 0.00236586076207459,
+      "distance_limit": 0.42409995198249817,
+      "passed": false,
+      "per_task": [
+        {
+          "dataset": 0,
+          "total": 727,
+          "accepted": 123,
+          "coverage": 0.16918844566712518,
+          "episodes": 6,
+          "mean_m": 0.005828639026731253,
+          "p95_m": 0.01769672892987725,
+          "passed": false
+        },
+        {
+          "dataset": 1,
+          "total": 843,
+          "accepted": 232,
+          "coverage": 0.2752075919335706,
+          "episodes": 6,
+          "mean_m": 0.0030404124408960342,
+          "p95_m": 0.00631396344397217,
+          "passed": true
+        },
+        {
+          "dataset": 2,
+          "total": 482,
+          "accepted": 19,
+          "coverage": 0.03941908713692946,
+          "episodes": 5,
+          "mean_m": 0.003510292386636138,
+          "p95_m": 0.0060360999777913085,
+          "passed": false
+        }
+      ],
+      "coverage": 0.18226120857699804,
+      "accepted": 374,
+      "mean_m": 0.003981267102062702,
+      "p95_m": 0.008673951029777522
+    },
+    {
+      "std_quantile": 0.2,
+      "distance_quantile": 0.8,
+      "std_limit_m": 0.00236586076207459,
+      "distance_limit": 0.531477987766266,
+      "passed": false,
+      "per_task": [
+        {
+          "dataset": 0,
+          "total": 727,
+          "accepted": 131,
+          "coverage": 0.18019257221458046,
+          "episodes": 6,
+          "mean_m": 0.00630550691857934,
+          "p95_m": 0.021839008666574955,
+          "passed": false
+        },
+        {
+          "dataset": 1,
+          "total": 843,
+          "accepted": 242,
+          "coverage": 0.2870699881376038,
+          "episodes": 6,
+          "mean_m": 0.0031732735224068165,
+          "p95_m": 0.006426835898309946,
+          "passed": true
+        },
+        {
+          "dataset": 2,
+          "total": 482,
+          "accepted": 37,
+          "coverage": 0.07676348547717843,
+          "episodes": 6,
+          "mean_m": 0.004693666007369757,
+          "p95_m": 0.00719733079895377,
+          "passed": false
+        }
+      ],
+      "coverage": 0.19980506822612085,
+      "accepted": 410,
+      "mean_m": 0.004311266355216503,
+      "p95_m": 0.009558289125561704
+    },
+    {
+      "std_quantile": 0.2,
+      "distance_quantile": 1.0,
+      "std_limit_m": 0.00236586076207459,
+      "distance_limit": 1.2199641466140747,
+      "passed": false,
+      "per_task": [
+        {
+          "dataset": 0,
+          "total": 727,
+          "accepted": 132,
+          "coverage": 0.1815680880330124,
+          "episodes": 6,
+          "mean_m": 0.006296441424638033,
+          "p95_m": 0.021619643177837083,
+          "passed": false
+        },
+        {
+          "dataset": 1,
+          "total": 843,
+          "accepted": 242,
+          "coverage": 0.2870699881376038,
+          "episodes": 6,
+          "mean_m": 0.0031732735224068165,
+          "p95_m": 0.006426835898309946,
+          "passed": true
+        },
+        {
+          "dataset": 2,
+          "total": 482,
+          "accepted": 37,
+          "coverage": 0.07676348547717843,
+          "episodes": 6,
+          "mean_m": 0.004693666007369757,
+          "p95_m": 0.00719733079895377,
+          "passed": false
+        }
+      ],
+      "coverage": 0.20029239766081872,
+      "accepted": 411,
+      "mean_m": 0.004313207231462002,
+      "p95_m": 0.009548503905534744
+    },
+    {
+      "std_quantile": 0.4,
+      "distance_quantile": 0.1,
+      "std_limit_m": 0.0031841266434639694,
+      "distance_limit": 0.2394370347261429,
+      "passed": false,
+      "per_task": [
+        {
+          "dataset": 0,
+          "total": 727,
+          "accepted": 45,
+          "coverage": 0.061898211829436035,
+          "episodes": 4,
+          "mean_m": 0.005160801112651825,
+          "p95_m": 0.021607974171638476,
+          "passed": false
+        },
+        {
+          "dataset": 1,
+          "total": 843,
+          "accepted": 144,
+          "coverage": 0.1708185053380783,
+          "episodes": 6,
+          "mean_m": 0.0030824756249785423,
+          "p95_m": 0.006227792659774419,
+          "passed": true
+        },
+        {
+          "dataset": 2,
+          "total": 482,
+          "accepted": 8,
+          "coverage": 0.016597510373443983,
+          "episodes": 2,
+          "mean_m": 0.0032117627561092377,
+          "p95_m": 0.004579825536347925,
+          "passed": false
+        }
+      ],
+      "coverage": 0.09600389863547758,
+      "accepted": 197,
+      "mean_m": 0.003562470432370901,
+      "p95_m": 0.006355402525514364
+    },
+    {
+      "std_quantile": 0.4,
+      "distance_quantile": 0.2,
+      "std_limit_m": 0.0031841266434639694,
+      "distance_limit": 0.2845667898654938,
+      "passed": false,
+      "per_task": [
+        {
+          "dataset": 0,
+          "total": 727,
+          "accepted": 108,
+          "coverage": 0.1485557083906465,
+          "episodes": 4,
+          "mean_m": 0.0048063150607049465,
+          "p95_m": 0.020939848199486695,
+          "passed": false
+        },
+        {
+          "dataset": 1,
+          "total": 843,
+          "accepted": 221,
+          "coverage": 0.26215895610913403,
+          "episodes": 6,
+          "mean_m": 0.0032019938807934523,
+          "p95_m": 0.006312855985015631,
+          "passed": true
+        },
+        {
+          "dataset": 2,
+          "total": 482,
+          "accepted": 12,
+          "coverage": 0.024896265560165973,
+          "episodes": 2,
+          "mean_m": 0.0031126830726861954,
+          "p95_m": 0.004621727601625025,
+          "passed": false
+        }
+      ],
+      "coverage": 0.16617933723196882,
+      "accepted": 341,
+      "mean_m": 0.003706964198499918,
+      "p95_m": 0.006764267571270466
+    },
+    {
+      "std_quantile": 0.4,
+      "distance_quantile": 0.4,
+      "std_limit_m": 0.0031841266434639694,
+      "distance_limit": 0.35584484934806826,
+      "passed": false,
+      "per_task": [
+        {
+          "dataset": 0,
+          "total": 727,
+          "accepted": 193,
+          "coverage": 0.265474552957359,
+          "episodes": 6,
+          "mean_m": 0.005190368741750717,
+          "p95_m": 0.017330641672015163,
+          "passed": false
+        },
+        {
+          "dataset": 1,
+          "total": 843,
+          "accepted": 339,
+          "coverage": 0.40213523131672596,
+          "episodes": 6,
+          "mean_m": 0.0034660431556403637,
+          "p95_m": 0.006587048154324293,
+          "passed": true
+        },
+        {
+          "dataset": 2,
+          "total": 482,
+          "accepted": 22,
+          "coverage": 0.04564315352697095,
+          "episodes": 4,
+          "mean_m": 0.003120408160611987,
+          "p95_m": 0.00464820999186486,
+          "passed": false
+        }
+      ],
+      "coverage": 0.2699805068226121,
+      "accepted": 554,
+      "mean_m": 0.004053029697388411,
+      "p95_m": 0.00867395102977753
+    },
+    {
+      "std_quantile": 0.4,
+      "distance_quantile": 0.6,
+      "std_limit_m": 0.0031841266434639694,
+      "distance_limit": 0.42409995198249817,
+      "passed": false,
+      "per_task": [
+        {
+          "dataset": 0,
+          "total": 727,
+          "accepted": 262,
+          "coverage": 0.3603851444291609,
+          "episodes": 6,
+          "mean_m": 0.006299108266830444,
+          "p95_m": 0.023955970816314204,
+          "passed": false
+        },
+        {
+          "dataset": 1,
+          "total": 843,
+          "accepted": 384,
+          "coverage": 0.4555160142348754,
+          "episodes": 6,
+          "mean_m": 0.0042325337417423725,
+          "p95_m": 0.0072162590920925055,
+          "passed": true
+        },
+        {
+          "dataset": 2,
+          "total": 482,
+          "accepted": 50,
+          "coverage": 0.1037344398340249,
+          "episodes": 5,
+          "mean_m": 0.004072994459420443,
+          "p95_m": 0.007681724382564422,
+          "passed": true
+        }
+      ],
+      "coverage": 0.3391812865497076,
+      "accepted": 696,
+      "mean_m": 0.004999007564038038,
+      "p95_m": 0.012533471453934908
+    },
+    {
+      "std_quantile": 0.4,
+      "distance_quantile": 0.8,
+      "std_limit_m": 0.0031841266434639694,
+      "distance_limit": 0.531477987766266,
+      "passed": false,
+      "per_task": [
+        {
+          "dataset": 0,
+          "total": 727,
+          "accepted": 293,
+          "coverage": 0.4030261348005502,
+          "episodes": 6,
+          "mean_m": 0.007235809229314327,
+          "p95_m": 0.027254925295710563,
+          "passed": false
+        },
+        {
+          "dataset": 1,
+          "total": 843,
+          "accepted": 415,
+          "coverage": 0.49228944246737844,
+          "episodes": 6,
+          "mean_m": 0.004449007101356983,
+          "p95_m": 0.00748754208907485,
+          "passed": true
+        },
+        {
+          "dataset": 2,
+          "total": 482,
+          "accepted": 90,
+          "coverage": 0.18672199170124482,
+          "episodes": 6,
+          "mean_m": 0.004761842545121908,
+          "p95_m": 0.008285879250615835,
+          "passed": true
+        }
+      ],
+      "coverage": 0.3888888888888889,
+      "accepted": 798,
+      "mean_m": 0.005507513415068388,
+      "p95_m": 0.01701321983709929
+    },
+    {
+      "std_quantile": 0.4,
+      "distance_quantile": 1.0,
+      "std_limit_m": 0.0031841266434639694,
+      "distance_limit": 1.2199641466140747,
+      "passed": false,
+      "per_task": [
+        {
+          "dataset": 0,
+          "total": 727,
+          "accepted": 296,
+          "coverage": 0.40715268225584594,
+          "episodes": 6,
+          "mean_m": 0.007363207638263702,
+          "p95_m": 0.02737043472006917,
+          "passed": false
+        },
+        {
+          "dataset": 1,
+          "total": 843,
+          "accepted": 419,
+          "coverage": 0.4970344009489917,
+          "episodes": 6,
+          "mean_m": 0.004530066624283791,
+          "p95_m": 0.007980053778737783,
+          "passed": true
+        },
+        {
+          "dataset": 2,
+          "total": 482,
+          "accepted": 106,
+          "coverage": 0.21991701244813278,
+          "episodes": 6,
+          "mean_m": 0.005109455436468124,
+          "p95_m": 0.008476285496726632,
+          "passed": false
+        }
+      ],
+      "coverage": 0.40009746588693956,
+      "accepted": 821,
+      "mean_m": 0.00562632130458951,
+      "p95_m": 0.01804463565349579
+    },
+    {
+      "std_quantile": 0.6,
+      "distance_quantile": 0.1,
+      "std_limit_m": 0.004297934658825397,
+      "distance_limit": 0.2394370347261429,
+      "passed": false,
+      "per_task": [
+        {
+          "dataset": 0,
+          "total": 727,
+          "accepted": 51,
+          "coverage": 0.07015130674002751,
+          "episodes": 4,
+          "mean_m": 0.005111863370984793,
+          "p95_m": 0.020271722227334976,
+          "passed": false
+        },
+        {
+          "dataset": 1,
+          "total": 843,
+          "accepted": 145,
+          "coverage": 0.17200474495848161,
+          "episodes": 6,
+          "mean_m": 0.00308460695669055,
+          "p95_m": 0.006199438218027343,
+          "passed": true
+        },
+        {
+          "dataset": 2,
+          "total": 482,
+          "accepted": 8,
+          "coverage": 0.016597510373443983,
+          "episodes": 2,
+          "mean_m": 0.0032117627561092377,
+          "p95_m": 0.004579825536347925,
+          "passed": false
+        }
+      ],
+      "coverage": 0.09941520467836257,
+      "accepted": 204,
+      "mean_m": 0.0035964075941592455,
+      "p95_m": 0.006378015736117959
+    },
+    {
+      "std_quantile": 0.6,
+      "distance_quantile": 0.2,
+      "std_limit_m": 0.004297934658825397,
+      "distance_limit": 0.2845667898654938,
+      "passed": false,
+      "per_task": [
+        {
+          "dataset": 0,
+          "total": 727,
+          "accepted": 134,
+          "coverage": 0.1843191196698762,
+          "episodes": 5,
+          "mean_m": 0.0049300966784358025,
+          "p95_m": 0.023035657964646808,
+          "passed": false
+        },
+        {
+          "dataset": 1,
+          "total": 843,
+          "accepted": 242,
+          "coverage": 0.2870699881376038,
+          "episodes": 6,
+          "mean_m": 0.003477264428511262,
+          "p95_m": 0.007228637742809946,
+          "passed": true
+        },
+        {
+          "dataset": 2,
+          "total": 482,
+          "accepted": 18,
+          "coverage": 0.03734439834024896,
+          "episodes": 2,
+          "mean_m": 0.003033772809430957,
+          "p95_m": 0.004605838167481125,
+          "passed": false
+        }
+      ],
+      "coverage": 0.19200779727095516,
+      "accepted": 394,
+      "mean_m": 0.003951113671064377,
+      "p95_m": 0.008605390600860097
+    },
+    {
+      "std_quantile": 0.6,
+      "distance_quantile": 0.4,
+      "std_limit_m": 0.004297934658825397,
+      "distance_limit": 0.35584484934806826,
+      "passed": false,
+      "per_task": [
+        {
+          "dataset": 0,
+          "total": 727,
+          "accepted": 251,
+          "coverage": 0.3452544704264099,
+          "episodes": 6,
+          "mean_m": 0.00561248604208231,
+          "p95_m": 0.021175280213356018,
+          "passed": false
+        },
+        {
+          "dataset": 1,
+          "total": 843,
+          "accepted": 409,
+          "coverage": 0.4851720047449585,
+          "episodes": 6,
+          "mean_m": 0.003838543314486742,
+          "p95_m": 0.007927180826663946,
+          "passed": true
+        },
+        {
+          "dataset": 2,
+          "total": 482,
+          "accepted": 37,
+          "coverage": 0.07676348547717843,
+          "episodes": 4,
+          "mean_m": 0.003211346687749028,
+          "p95_m": 0.005005219206213949,
+          "passed": false
+        }
+      ],
+      "coverage": 0.33966861598440545,
+      "accepted": 697,
+      "mean_m": 0.0044440715573728085,
+      "p95_m": 0.012766160443425175
+    },
+    {
+      "std_quantile": 0.6,
+      "distance_quantile": 0.6,
+      "std_limit_m": 0.004297934658825397,
+      "distance_limit": 0.42409995198249817,
+      "passed": false,
+      "per_task": [
+        {
+          "dataset": 0,
+          "total": 727,
+          "accepted": 367,
+          "coverage": 0.5048143053645117,
+          "episodes": 6,
+          "mean_m": 0.0070739248767495155,
+          "p95_m": 0.02523912228643894,
+          "passed": false
+        },
+        {
+          "dataset": 1,
+          "total": 843,
+          "accepted": 506,
+          "coverage": 0.6002372479240806,
+          "episodes": 6,
+          "mean_m": 0.005030847154557705,
+          "p95_m": 0.010060521541163325,
+          "passed": false
+        },
+        {
+          "dataset": 2,
+          "total": 482,
+          "accepted": 80,
+          "coverage": 0.16597510373443983,
+          "episodes": 6,
+          "mean_m": 0.003948121797293425,
+          "p95_m": 0.007192972744815048,
+          "passed": true
+        }
+      ],
+      "coverage": 0.4644249512670565,
+      "accepted": 953,
+      "mean_m": 0.005726746283471584,
+      "p95_m": 0.017185098677873597
+    },
+    {
+      "std_quantile": 0.6,
+      "distance_quantile": 0.8,
+      "std_limit_m": 0.004297934658825397,
+      "distance_limit": 0.531477987766266,
+      "passed": false,
+      "per_task": [
+        {
+          "dataset": 0,
+          "total": 727,
+          "accepted": 428,
+          "coverage": 0.5887207702888583,
+          "episodes": 6,
+          "mean_m": 0.008290649391710758,
+          "p95_m": 0.03179121799767015,
+          "passed": false
+        },
+        {
+          "dataset": 1,
+          "total": 843,
+          "accepted": 573,
+          "coverage": 0.6797153024911032,
+          "episodes": 6,
+          "mean_m": 0.0053825536742806435,
+          "p95_m": 0.01439616587013006,
+          "passed": false
+        },
+        {
+          "dataset": 2,
+          "total": 482,
+          "accepted": 165,
+          "coverage": 0.34232365145228216,
+          "episodes": 6,
+          "mean_m": 0.005308086983859539,
+          "p95_m": 0.011262210085988022,
+          "passed": false
+        }
+      ],
+      "coverage": 0.5682261208576999,
+      "accepted": 1166,
+      "mean_m": 0.006439481396228075,
+      "p95_m": 0.02053423598408699
+    },
+    {
+      "std_quantile": 0.6,
+      "distance_quantile": 1.0,
+      "std_limit_m": 0.004297934658825397,
+      "distance_limit": 1.2199641466140747,
+      "passed": false,
+      "per_task": [
+        {
+          "dataset": 0,
+          "total": 727,
+          "accepted": 437,
+          "coverage": 0.6011004126547456,
+          "episodes": 6,
+          "mean_m": 0.008658451028168201,
+          "p95_m": 0.033046930283308025,
+          "passed": false
+        },
+        {
+          "dataset": 1,
+          "total": 843,
+          "accepted": 586,
+          "coverage": 0.6951364175563464,
+          "episodes": 6,
+          "mean_m": 0.0055118221789598465,
+          "p95_m": 0.014529813081026077,
+          "passed": false
+        },
+        {
+          "dataset": 2,
+          "total": 482,
+          "accepted": 208,
+          "coverage": 0.4315352697095436,
+          "episodes": 6,
+          "mean_m": 0.005918353796005249,
+          "p95_m": 0.011786730773746965,
+          "passed": false
+        }
+      ],
+      "coverage": 0.5999025341130604,
+      "accepted": 1231,
+      "mean_m": 0.006697553209960461,
+      "p95_m": 0.020975965075194836
+    },
+    {
+      "std_quantile": 0.8,
+      "distance_quantile": 0.1,
+      "std_limit_m": 0.006087753083556891,
+      "distance_limit": 0.2394370347261429,
+      "passed": false,
+      "per_task": [
+        {
+          "dataset": 0,
+          "total": 727,
+          "accepted": 53,
+          "coverage": 0.07290233837689133,
+          "episodes": 4,
+          "mean_m": 0.005323185119777918,
+          "p95_m": 0.019826304912567132,
+          "passed": false
+        },
+        {
+          "dataset": 1,
+          "total": 843,
+          "accepted": 145,
+          "coverage": 0.17200474495848161,
+          "episodes": 6,
+          "mean_m": 0.00308460695669055,
+          "p95_m": 0.006199438218027343,
+          "passed": true
+        },
+        {
+          "dataset": 2,
+          "total": 482,
+          "accepted": 8,
+          "coverage": 0.016597510373443983,
+          "episodes": 2,
+          "mean_m": 0.0032117627561092377,
+          "p95_m": 0.004579825536347925,
+          "passed": false
+        }
+      ],
+      "coverage": 0.10038986354775828,
+      "accepted": 206,
+      "mean_m": 0.0036654893774539232,
+      "p95_m": 0.006720279343426228
+    },
+    {
+      "std_quantile": 0.8,
+      "distance_quantile": 0.2,
+      "std_limit_m": 0.006087753083556891,
+      "distance_limit": 0.2845667898654938,
+      "passed": false,
+      "per_task": [
+        {
+          "dataset": 0,
+          "total": 727,
+          "accepted": 141,
+          "coverage": 0.1939477303988996,
+          "episodes": 5,
+          "mean_m": 0.005167377647012472,
+          "p95_m": 0.02403266355395317,
+          "passed": false
+        },
+        {
+          "dataset": 1,
+          "total": 843,
+          "accepted": 250,
+          "coverage": 0.29655990510083036,
+          "episodes": 6,
+          "mean_m": 0.003926075994968414,
+          "p95_m": 0.008311505150049922,
+          "passed": true
+        },
+        {
+          "dataset": 2,
+          "total": 482,
+          "accepted": 18,
+          "coverage": 0.03734439834024896,
+          "episodes": 2,
+          "mean_m": 0.003033772809430957,
+          "p95_m": 0.004605838167481125,
+          "passed": false
+        }
+      ],
+      "coverage": 0.199317738791423,
+      "accepted": 409,
+      "mean_m": 0.004314735997468233,
+      "p95_m": 0.0105679452419281
+    },
+    {
+      "std_quantile": 0.8,
+      "distance_quantile": 0.4,
+      "std_limit_m": 0.006087753083556891,
+      "distance_limit": 0.35584484934806826,
+      "passed": false,
+      "per_task": [
+        {
+          "dataset": 0,
+          "total": 727,
+          "accepted": 302,
+          "coverage": 0.4154057771664374,
+          "episodes": 6,
+          "mean_m": 0.006570130120962858,
+          "p95_m": 0.021948411036282773,
+          "passed": false
+        },
+        {
+          "dataset": 1,
+          "total": 843,
+          "accepted": 456,
+          "coverage": 0.5409252669039146,
+          "episodes": 6,
+          "mean_m": 0.004766855388879776,
+          "p95_m": 0.014663607813417912,
+          "passed": false
+        },
+        {
+          "dataset": 2,
+          "total": 482,
+          "accepted": 40,
+          "coverage": 0.08298755186721991,
+          "episodes": 4,
+          "mean_m": 0.0032108016312122345,
+          "p95_m": 0.004933065548539161,
+          "passed": false
+        }
+      ],
+      "coverage": 0.3888888888888889,
+      "accepted": 798,
+      "mean_m": 0.005371300037950277,
+      "p95_m": 0.018326207157224415
+    },
+    {
+      "std_quantile": 0.8,
+      "distance_quantile": 0.6,
+      "std_limit_m": 0.006087753083556891,
+      "distance_limit": 0.42409995198249817,
+      "passed": false,
+      "per_task": [
+        {
+          "dataset": 0,
+          "total": 727,
+          "accepted": 462,
+          "coverage": 0.6354883081155434,
+          "episodes": 6,
+          "mean_m": 0.008076446130871773,
+          "p95_m": 0.025413425918668506,
+          "passed": false
+        },
+        {
+          "dataset": 1,
+          "total": 843,
+          "accepted": 600,
+          "coverage": 0.7117437722419929,
+          "episodes": 6,
+          "mean_m": 0.005941949784755707,
+          "p95_m": 0.016240584850311244,
+          "passed": false
+        },
+        {
+          "dataset": 2,
+          "total": 482,
+          "accepted": 97,
+          "coverage": 0.2012448132780083,
+          "episodes": 6,
+          "mean_m": 0.004235472530126572,
+          "p95_m": 0.008437693864107131,
+          "passed": true
+        }
+      ],
+      "coverage": 0.5648148148148148,
+      "accepted": 1159,
+      "mean_m": 0.006649981718510389,
+      "p95_m": 0.02153028938919303
+    },
+    {
+      "std_quantile": 0.8,
+      "distance_quantile": 0.8,
+      "std_limit_m": 0.006087753083556891,
+      "distance_limit": 0.531477987766266,
+      "passed": false,
+      "per_task": [
+        {
+          "dataset": 0,
+          "total": 727,
+          "accepted": 562,
+          "coverage": 0.7730398899587345,
+          "episodes": 6,
+          "mean_m": 0.009475070051848888,
+          "p95_m": 0.031334445811808095,
+          "passed": false
+        },
+        {
+          "dataset": 1,
+          "total": 843,
+          "accepted": 689,
+          "coverage": 0.8173190984578885,
+          "episodes": 6,
+          "mean_m": 0.006401302758604288,
+          "p95_m": 0.019606440886855127,
+          "passed": false
+        },
+        {
+          "dataset": 2,
+          "total": 482,
+          "accepted": 224,
+          "coverage": 0.46473029045643155,
+          "episodes": 6,
+          "mean_m": 0.005660095252096653,
+          "p95_m": 0.011814756179228425,
+          "passed": false
+        }
+      ],
+      "coverage": 0.7188109161793372,
+      "accepted": 1475,
+      "mean_m": 0.007459897082298994,
+      "p95_m": 0.025307829864323134
+    },
+    {
+      "std_quantile": 0.8,
+      "distance_quantile": 1.0,
+      "std_limit_m": 0.006087753083556891,
+      "distance_limit": 1.2199641466140747,
+      "passed": false,
+      "per_task": [
+        {
+          "dataset": 0,
+          "total": 727,
+          "accepted": 593,
+          "coverage": 0.8156808803301238,
+          "episodes": 6,
+          "mean_m": 0.010001850314438343,
+          "p95_m": 0.032105406373739244,
+          "passed": false
+        },
+        {
+          "dataset": 1,
+          "total": 843,
+          "accepted": 730,
+          "coverage": 0.8659549228944247,
+          "episodes": 6,
+          "mean_m": 0.006856056861579418,
+          "p95_m": 0.0210839812643826,
+          "passed": false
+        },
+        {
+          "dataset": 2,
+          "total": 482,
+          "accepted": 318,
+          "coverage": 0.6597510373443983,
+          "episodes": 6,
+          "mean_m": 0.006944183260202408,
+          "p95_m": 0.01618815716356039,
+          "passed": false
+        }
+      ],
+      "coverage": 0.7997076023391813,
+      "accepted": 1641,
+      "mean_m": 0.008009913377463818,
+      "p95_m": 0.025994516909122467
+    },
+    {
+      "std_quantile": 1.0,
+      "distance_quantile": 0.1,
+      "std_limit_m": 0.017239004373550415,
+      "distance_limit": 0.2394370347261429,
+      "passed": false,
+      "per_task": [
+        {
+          "dataset": 0,
+          "total": 727,
+          "accepted": 53,
+          "coverage": 0.07290233837689133,
+          "episodes": 4,
+          "mean_m": 0.005323185119777918,
+          "p95_m": 0.019826304912567132,
+          "passed": false
+        },
+        {
+          "dataset": 1,
+          "total": 843,
+          "accepted": 145,
+          "coverage": 0.17200474495848161,
+          "episodes": 6,
+          "mean_m": 0.00308460695669055,
+          "p95_m": 0.006199438218027343,
+          "passed": true
+        },
+        {
+          "dataset": 2,
+          "total": 482,
+          "accepted": 8,
+          "coverage": 0.016597510373443983,
+          "episodes": 2,
+          "mean_m": 0.0032117627561092377,
+          "p95_m": 0.004579825536347925,
+          "passed": false
+        }
+      ],
+      "coverage": 0.10038986354775828,
+      "accepted": 206,
+      "mean_m": 0.0036654893774539232,
+      "p95_m": 0.006720279343426228
+    },
+    {
+      "std_quantile": 1.0,
+      "distance_quantile": 0.2,
+      "std_limit_m": 0.017239004373550415,
+      "distance_limit": 0.2845667898654938,
+      "passed": false,
+      "per_task": [
+        {
+          "dataset": 0,
+          "total": 727,
+          "accepted": 141,
+          "coverage": 0.1939477303988996,
+          "episodes": 5,
+          "mean_m": 0.005167377647012472,
+          "p95_m": 0.02403266355395317,
+          "passed": false
+        },
+        {
+          "dataset": 1,
+          "total": 843,
+          "accepted": 252,
+          "coverage": 0.298932384341637,
+          "episodes": 6,
+          "mean_m": 0.004046506714075804,
+          "p95_m": 0.008667996712028973,
+          "passed": true
+        },
+        {
+          "dataset": 2,
+          "total": 482,
+          "accepted": 18,
+          "coverage": 0.03734439834024896,
+          "episodes": 2,
+          "mean_m": 0.003033772809430957,
+          "p95_m": 0.004605838167481125,
+          "passed": false
+        }
+      ],
+      "coverage": 0.20029239766081872,
+      "accepted": 411,
+      "mean_m": 0.0043866862542927265,
+      "p95_m": 0.010711885523051023
+    },
+    {
+      "std_quantile": 1.0,
+      "distance_quantile": 0.4,
+      "std_limit_m": 0.017239004373550415,
+      "distance_limit": 0.35584484934806826,
+      "passed": false,
+      "per_task": [
+        {
+          "dataset": 0,
+          "total": 727,
+          "accepted": 313,
+          "coverage": 0.4305364511691884,
+          "episodes": 6,
+          "mean_m": 0.006872594356536865,
+          "p95_m": 0.02218274399638175,
+          "passed": false
+        },
+        {
+          "dataset": 1,
+          "total": 843,
+          "accepted": 468,
+          "coverage": 0.5551601423487544,
+          "episodes": 6,
+          "mean_m": 0.004828224889934063,
+          "p95_m": 0.014835525490343561,
+          "passed": false
+        },
+        {
+          "dataset": 2,
+          "total": 482,
+          "accepted": 40,
+          "coverage": 0.08298755186721991,
+          "episodes": 4,
+          "mean_m": 0.0032108016312122345,
+          "p95_m": 0.004933065548539161,
+          "passed": false
+        }
+      ],
+      "coverage": 0.40009746588693956,
+      "accepted": 821,
+      "mean_m": 0.00552882207557559,
+      "p95_m": 0.019270822405815125
+    },
+    {
+      "std_quantile": 1.0,
+      "distance_quantile": 0.6,
+      "std_limit_m": 0.017239004373550415,
+      "distance_limit": 0.42409995198249817,
+      "passed": false,
+      "per_task": [
+        {
+          "dataset": 0,
+          "total": 727,
+          "accepted": 495,
+          "coverage": 0.6808803301237965,
+          "episodes": 6,
+          "mean_m": 0.008340480737388134,
+          "p95_m": 0.025324586965143673,
+          "passed": false
+        },
+        {
+          "dataset": 1,
+          "total": 843,
+          "accepted": 637,
+          "coverage": 0.7556346381969158,
+          "episodes": 6,
+          "mean_m": 0.006146012339740992,
+          "p95_m": 0.01721218712627879,
+          "passed": false
+        },
+        {
+          "dataset": 2,
+          "total": 482,
+          "accepted": 99,
+          "coverage": 0.2053941908713693,
+          "episodes": 6,
+          "mean_m": 0.004886524751782417,
+          "p95_m": 0.009041258320212346,
+          "passed": true
+        }
+      ],
+      "coverage": 0.5999025341130604,
+      "accepted": 1231,
+      "mean_m": 0.006927143782377243,
+      "p95_m": 0.022498774342238903
+    },
+    {
+      "std_quantile": 1.0,
+      "distance_quantile": 0.8,
+      "std_limit_m": 0.017239004373550415,
+      "distance_limit": 0.531477987766266,
+      "passed": false,
+      "per_task": [
+        {
+          "dataset": 0,
+          "total": 727,
+          "accepted": 630,
+          "coverage": 0.8665749656121046,
+          "episodes": 6,
+          "mean_m": 0.010015193372964859,
+          "p95_m": 0.03126721922308206,
+          "passed": false
+        },
+        {
+          "dataset": 1,
+          "total": 843,
+          "accepted": 764,
+          "coverage": 0.9062870699881376,
+          "episodes": 6,
+          "mean_m": 0.007544844411313534,
+          "p95_m": 0.031831206008791926,
+          "passed": false
+        },
+        {
+          "dataset": 2,
+          "total": 482,
+          "accepted": 247,
+          "coverage": 0.5124481327800829,
+          "episodes": 6,
+          "mean_m": 0.006663696374744177,
+          "p95_m": 0.01590840760618448,
+          "passed": false
+        }
+      ],
+      "coverage": 0.7997076023391813,
+      "accepted": 1641,
+      "mean_m": 0.008360613137483597,
+      "p95_m": 0.029721850529313087
+    },
+    {
+      "std_quantile": 1.0,
+      "distance_quantile": 1.0,
+      "std_limit_m": 0.017239004373550415,
+      "distance_limit": 1.2199641466140747,
+      "passed": false,
+      "per_task": [
+        {
+          "dataset": 0,
+          "total": 727,
+          "accepted": 727,
+          "coverage": 1.0,
+          "episodes": 6,
+          "mean_m": 0.01139797456562519,
+          "p95_m": 0.034350815415382374,
+          "passed": false
+        },
+        {
+          "dataset": 1,
+          "total": 843,
+          "accepted": 843,
+          "coverage": 1.0,
+          "episodes": 6,
+          "mean_m": 0.008499118499457836,
+          "p95_m": 0.036378932371735576,
+          "passed": false
+        },
+        {
+          "dataset": 2,
+          "total": 482,
+          "accepted": 482,
+          "coverage": 1.0,
+          "episodes": 6,
+          "mean_m": 0.011101084761321545,
+          "p95_m": 0.03526833467185496,
+          "passed": false
+        }
+      ],
+      "coverage": 1.0,
+      "accepted": 2052,
+      "mean_m": 0.01013733260333538,
+      "p95_m": 0.035260820761322954
+    }
+  ]
+}

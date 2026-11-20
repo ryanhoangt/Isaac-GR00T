@@ -1,0 +1,145 @@
+{
+  "status": "completed",
+  "ready_for_endpoint": false,
+  "training_transitions": 14231,
+  "validation_transitions": 1030,
+  "architecture": {
+    "input_dim": 120,
+    "hidden": [
+      128,
+      128
+    ],
+    "output": "EE delta xyz in meters",
+    "ensemble": 3,
+    "spectral": false
+  },
+  "validation": {
+    "mean_m": 0.009846233249443032,
+    "median_m": 0.005935161141678691,
+    "p95_m": 0.030946897901594626,
+    "max_m": 0.07164257019758224
+  },
+  "per_task": [
+    {
+      "dataset": 0,
+      "mean_m": 0.014329993622723174,
+      "median_m": 0.00886800978332758,
+      "p95_m": 0.040901242941617955,
+      "max_m": 0.07164257019758224
+    },
+    {
+      "dataset": 1,
+      "mean_m": 0.007250385454203494,
+      "median_m": 0.005050952546298504,
+      "p95_m": 0.019700892176479082,
+      "max_m": 0.03860417753458023
+    },
+    {
+      "dataset": 2,
+      "mean_m": 0.00783794815675449,
+      "median_m": 0.005892402958124876,
+      "p95_m": 0.020301673561334607,
+      "max_m": 0.026608746498823166
+    }
+  ],
+  "ridge_validation": {
+    "mean_m": 0.022210166403047234,
+    "median_m": 0.01744653284549713,
+    "p95_m": 0.05343202501535415,
+    "max_m": 0.09080144017934799
+  },
+  "zero_motion_validation": {
+    "mean_m": 0.1086939399234625,
+    "median_m": 0.10731358081102371,
+    "p95_m": 0.18788945823907846,
+    "max_m": 0.20758908987045288
+  },
+  "observed_policy_errors": [
+    {
+      "case": "libero_goal_task00_init000",
+      "mode": "action",
+      "error_m": 0.004341242369264364,
+      "std_m": 0.005178541410714388
+    },
+    {
+      "case": "libero_goal_task00_init001",
+      "mode": "action",
+      "error_m": 0.005118444096297026,
+      "std_m": 0.003762359730899334
+    },
+    {
+      "case": "libero_goal_task00_init002",
+      "mode": "action",
+      "error_m": 0.005572519265115261,
+      "std_m": 0.002307204296812415
+    },
+    {
+      "case": "libero_object_task00_init000",
+      "mode": "action",
+      "error_m": 0.002800887916237116,
+      "std_m": 0.0022429253440350294
+    },
+    {
+      "case": "libero_object_task00_init001",
+      "mode": "action",
+      "error_m": 0.002347873756662011,
+      "std_m": 0.0028014613781124353
+    },
+    {
+      "case": "libero_object_task00_init002",
+      "mode": "action",
+      "error_m": 0.0034446639474481344,
+      "std_m": 0.003802286693826318
+    },
+    {
+      "case": "libero_goal_task00_init000",
+      "mode": "goal",
+      "error_m": 0.003362407675012946,
+      "std_m": 0.003990067634731531
+    },
+    {
+      "case": "libero_goal_task00_init001",
+      "mode": "goal",
+      "error_m": 0.00323047605343163,
+      "std_m": 0.0034843336325138807
+    },
+    {
+      "case": "libero_goal_task00_init002",
+      "mode": "goal",
+      "error_m": 0.009705099277198315,
+      "std_m": 0.006255761254578829
+    },
+    {
+      "case": "libero_object_task00_init000",
+      "mode": "goal",
+      "error_m": 0.007874930277466774,
+      "std_m": 0.002080378821119666
+    },
+    {
+      "case": "libero_object_task00_init001",
+      "mode": "goal",
+      "error_m": 0.005868144799023867,
+      "std_m": 0.0030226679518818855
+    },
+    {
+      "case": "libero_object_task00_init002",
+      "mode": "goal",
+      "error_m": 0.0035347058437764645,
+      "std_m": 0.003229528432711959
+    }
+  ],
+  "policy_goal_validation": {
+    "mean_m": 0.005595960654318333,
+    "median_m": 0.0047014253214001656,
+    "p95_m": 0.00924755702726543,
+    "max_m": 0.009705099277198315
+  },
+  "training_std_p99_m": 0.005744054447859526,
+  "gates": {
+    "max_mean_m": 0.005,
+    "max_p95_m": 0.01,
+    "max_policy_error_m": 0.02
+  },
+  "caveat": "Empirical reliability filters, not guarantees on unseen actions or correct dynamics gradients; no CCIL labels generated.",
+  "model_jacobian_spectral_mean": 0.08951006084680557
+}

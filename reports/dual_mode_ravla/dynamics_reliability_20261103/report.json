@@ -1,0 +1,250 @@
+{
+  "status": "completed",
+  "ready_for_endpoint": false,
+  "training_windows": 10049,
+  "training_episodes": 87,
+  "split_seed": 20261103,
+  "criteria": {
+    "max_mean": 0.005,
+    "max_p95": 0.01,
+    "min_coverage": 0.1,
+    "min_windows": 32,
+    "min_episodes": 2
+  },
+  "selected": null,
+  "evaluation": {
+    "calibration": {
+      "windows": 2052,
+      "episodes": 18,
+      "unfiltered": {
+        "mean_m": 0.010137332822209801,
+        "median_m": 0.005677196895703673,
+        "p95_m": 0.035260820761322954,
+        "max_m": 0.1110280305147171
+      },
+      "filtered": {
+        "passed": false,
+        "per_task": [
+          {
+            "dataset": 0,
+            "total": 727,
+            "accepted": 0,
+            "coverage": 0.0,
+            "episodes": 0,
+            "mean_m": null,
+            "p95_m": null,
+            "passed": false
+          },
+          {
+            "dataset": 1,
+            "total": 843,
+            "accepted": 0,
+            "coverage": 0.0,
+            "episodes": 0,
+            "mean_m": null,
+            "p95_m": null,
+            "passed": false
+          },
+          {
+            "dataset": 2,
+            "total": 482,
+            "accepted": 0,
+            "coverage": 0.0,
+            "episodes": 0,
+            "mean_m": null,
+            "p95_m": null,
+            "passed": false
+          }
+        ],
+        "coverage": 0.0,
+        "accepted": 0,
+        "mean_m": null,
+        "p95_m": null
+      },
+      "spread_error_spearman": 0.5414531459390303,
+      "distance_error_spearman": 0.5285440140273671
+    },
+    "test": {
+      "windows": 2130,
+      "episodes": 18,
+      "unfiltered": {
+        "mean_m": 0.009884973498592957,
+        "median_m": 0.0058207584079355,
+        "p95_m": 0.03392155431210995,
+        "max_m": 0.0698728933930397
+      },
+      "filtered": {
+        "passed": false,
+        "per_task": [
+          {
+            "dataset": 0,
+            "total": 760,
+            "accepted": 0,
+            "coverage": 0.0,
+            "episodes": 0,
+            "mean_m": null,
+            "p95_m": null,
+            "passed": false
+          },
+          {
+            "dataset": 1,
+            "total": 898,
+            "accepted": 0,
+            "coverage": 0.0,
+            "episodes": 0,
+            "mean_m": null,
+            "p95_m": null,
+            "passed": false
+          },
+          {
+            "dataset": 2,
+            "total": 472,
+            "accepted": 0,
+            "coverage": 0.0,
+            "episodes": 0,
+            "mean_m": null,
+            "p95_m": null,
+            "passed": false
+          }
+        ],
+        "coverage": 0.0,
+        "accepted": 0,
+        "mean_m": null,
+        "p95_m": null
+      },
+      "spread_error_spearman": 0.5667646638419146,
+      "distance_error_spearman": 0.5547874924520714
+    },
+    "audit": {
+      "windows": 1030,
+      "episodes": 9,
+      "unfiltered": {
+        "mean_m": 0.009706635014560906,
+        "median_m": 0.006440594559535384,
+        "p95_m": 0.028430116549134236,
+        "max_m": 0.06916262954473495
+      },
+      "filtered": {
+        "passed": false,
+        "per_task": [
+          {
+            "dataset": 0,
+            "total": 357,
+            "accepted": 0,
+            "coverage": 0.0,
+            "episodes": 0,
+            "mean_m": null,
+            "p95_m": null,
+            "passed": false
+          },
+          {
+            "dataset": 1,
+            "total": 424,
+            "accepted": 0,
+            "coverage": 0.0,
+            "episodes": 0,
+            "mean_m": null,
+            "p95_m": null,
+            "passed": false
+          },
+          {
+            "dataset": 2,
+            "total": 249,
+            "accepted": 0,
+            "coverage": 0.0,
+            "episodes": 0,
+            "mean_m": null,
+            "p95_m": null,
+            "passed": false
+          }
+        ],
+        "coverage": 0.0,
+        "accepted": 0,
+        "mean_m": null,
+        "p95_m": null
+      },
+      "spread_error_spearman": 0.5257300236032645,
+      "distance_error_spearman": 0.47915859036229896
+    }
+  },
+  "observed_policy_errors": [
+    {
+      "case": "libero_goal_task00_init000",
+      "mode": "action",
+      "error_m": 0.003044771496206522,
+      "std_m": 0.0035074648912996054
+    },
+    {
+      "case": "libero_goal_task00_init001",
+      "mode": "action",
+      "error_m": 0.008665581233799458,
+      "std_m": 0.00120477972086519
+    },
+    {
+      "case": "libero_goal_task00_init002",
+      "mode": "action",
+      "error_m": 0.0037688135635107756,
+      "std_m": 0.001416017534211278
+    },
+    {
+      "case": "libero_object_task00_init000",
+      "mode": "action",
+      "error_m": 0.003646695287898183,
+      "std_m": 0.0016938660992309451
+    },
+    {
+      "case": "libero_object_task00_init001",
+      "mode": "action",
+      "error_m": 0.0028430887032300234,
+      "std_m": 0.0009606659295968711
+    },
+    {
+      "case": "libero_object_task00_init002",
+      "mode": "action",
+      "error_m": 0.0011197198182344437,
+      "std_m": 0.002388615161180496
+    },
+    {
+      "case": "libero_goal_task00_init000",
+      "mode": "goal",
+      "error_m": 0.0031303202267736197,
+      "std_m": 0.0023369186092168093
+    },
+    {
+      "case": "libero_goal_task00_init001",
+      "mode": "goal",
+      "error_m": 0.0018750076415017247,
+      "std_m": 0.005156032741069794
+    },
+    {
+      "case": "libero_goal_task00_init002",
+      "mode": "goal",
+      "error_m": 0.010566464625298977,
+      "std_m": 0.004069667775183916
+    },
+    {
+      "case": "libero_object_task00_init000",
+      "mode": "goal",
+      "error_m": 0.008690501563251019,
+      "std_m": 0.001872084685601294
+    },
+    {
+      "case": "libero_object_task00_init001",
+      "mode": "goal",
+      "error_m": 0.005249941721558571,
+      "std_m": 0.002923840656876564
+    },
+    {
+      "case": "libero_object_task00_init002",
+      "mode": "goal",
+      "error_m": 0.0025403834879398346,
+      "std_m": 0.003547203727066517
+    }
+  ],
+  "caveats": [
+    "Empirical filter, not a conformal bound or guarantee on action gradients.",
+    "Overlapping windows are correlated; episode counts and per-task results are reported.",
+    "Thresholds use calibration only. Test and earlier validation audit never tune thresholds.",
+    "The starting policy may have seen these expert demos; this split validates dynamics only."
+  ]
+}
