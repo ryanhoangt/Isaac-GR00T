@@ -1,11 +1,14 @@
-"""Check benchmark-to-GR00T mapping without a model, simulator or network."""
+"""Check mapping and the real GR00T HTTP protocol with a fake CPU policy."""
 
 import copy
+import multiprocessing
+import socket
+import time
 
 import numpy as np
 import pytest
 
-from examples.RoboMME.adapter import to_gr00t_observation, to_robomme_actions
+from examples.RoboMME.adapter import RoboMMEGr00tClient, to_gr00t_observation, to_robomme_actions
 
 
 @pytest.fixture
@@ -137,3 +140,164 @@ def test_physical_action_order_and_values(horizon):
 def test_invalid_physical_action_is_rejected(prediction, message):
     with pytest.raises(ValueError, match=message):
         to_robomme_actions(prediction)
+
+
+def _serve_gr00t_stub(listener, observations):
+    # Keep the server's global json_numpy.patch() and heavy model imports in
+    # the child process, exactly as in a separate simulator/model environment.
+    import uvicorn
+
+    from gr00t.eval.http_server import HTTPInferenceServer
+
+    class FakePolicy:
+        def get_action(self, observation):
+            observations.put(observation)
+            goal = observation["annotation.human.action.task_description"][0]
+            if goal == "raise an error":
+                raise RuntimeError("stub inference failed")
+            if goal == "invalid output":
+                return {"action": np.zeros((16, 32), np.float32)}
+            return {
+                "action.joint_position": observation["state.joint_position"] + np.arange(16)[:, None] / 100,
+                "action.gripper": np.linspace(-1, 1, 16, dtype=np.float32)[:, None],
+            }
+
+    app = HTTPInferenceServer(FakePolicy(), port=0).app
+    uvicorn.Server(uvicorn.Config(app, log_level="error")).run(sockets=[listener])
+
+
+@pytest.fixture(scope="module")
+def gr00t_http_server():
+    import requests
+
+    context = multiprocessing.get_context("spawn")
+    observations = context.Queue()
+    with socket.socket() as listener:
+        listener.bind(("127.0.0.1", 0))
+        listener.listen()
+        url = f"http://127.0.0.1:{listener.getsockname()[1]}"
+        process = context.Process(target=_serve_gr00t_stub, args=(listener, observations))
+        process.start()
+        try:
+            deadline = time.monotonic() + 40
+            while True:
+                if not process.is_alive():
+                    pytest.fail(f"GR00T stub server exited with code {process.exitcode}")
+                try:
+                    response = requests.get(f"{url}/health", timeout=0.2)
+                    if response.status_code == 200:
+                        break
+                except requests.RequestException:
+                    pass
+                if time.monotonic() > deadline:
+                    pytest.fail("GR00T stub server did not become healthy")
+                time.sleep(0.05)
+            yield url, observations
+        finally:
+            process.terminate()
+            process.join(timeout=5)
+            if process.is_alive():
+                process.kill()
+                process.join(timeout=5)
+            observations.close()
+            observations.join_thread()
+
+
+def test_http_round_trip_and_episode_reset(gr00t_http_server, benchmark_inputs):
+    url, observations = gr00t_http_server
+    benchmark_inputs["task_goal"] = ["Pick the RED cube — lấy khối đỏ"]
+    with RoboMMEGr00tClient(url + "/", timeout=5) as client:
+        assert client.reset() == {"reset_finished": True}
+        for step in range(2):
+            expected = to_gr00t_observation(benchmark_inputs)
+            result = client.infer(benchmark_inputs)
+            received = observations.get(timeout=5)
+            assert set(received) == set(expected)
+            for key in expected:
+                np.testing.assert_array_equal(received[key], expected[key])
+                assert received[key].dtype == expected[key].dtype
+            assert set(result) == {"actions"}
+            assert result["actions"].shape == (16, 8) and result["actions"].dtype == np.float32
+            np.testing.assert_allclose(
+                result["actions"][:, :7], expected["state.joint_position"] + np.arange(16)[:, None] / 100
+            )
+            np.testing.assert_allclose(result["actions"][:, 7], np.linspace(-1, 1, 16), atol=1e-7)
+            assert client.reset() == {"reset_finished": True}
+            # Next episode must use its own observation, without client-side history.
+            if step == 0:
+                benchmark_inputs = copy.deepcopy(benchmark_inputs)
+                benchmark_inputs["joint_state_list"][-1] = np.full(7, -0.75)
+                benchmark_inputs["front_rgb_list"][-1][...] = 83
+                benchmark_inputs["task_goal"] = ["A different episode"]
+
+
+@pytest.mark.parametrize(
+    "goal,exception,message",
+    [
+        ("raise an error", "http", "500"),
+        ("invalid output", "mapping", "Missing physical action field"),
+    ],
+)
+def test_http_errors_and_invalid_actions(gr00t_http_server, benchmark_inputs, goal, exception, message):
+    import requests
+
+    url, observations = gr00t_http_server
+    benchmark_inputs["task_goal"] = [goal]
+    error = requests.HTTPError if exception == "http" else ValueError
+    with RoboMMEGr00tClient(url, timeout=5) as client:
+        with pytest.raises(error, match=message):
+            client.infer(benchmark_inputs)
+    observations.get(timeout=5)
+
+
+def test_reset_makes_no_http_request_and_inference_errors_are_not_retried(monkeypatch, benchmark_inputs):
+    import requests
+
+    calls = []
+    with RoboMMEGr00tClient(timeout=0.25) as client:
+
+        def timeout(url, **kwargs):
+            calls.append((url, kwargs))
+            raise requests.Timeout("stub timeout")
+
+        monkeypatch.setattr(client._session, "post", timeout)
+        assert client.reset() == {"reset_finished": True} and not calls
+        with pytest.raises(requests.Timeout, match="stub timeout"):
+            client.infer(benchmark_inputs)
+        assert len(calls) == 1 and calls[0][1]["timeout"] == 0.25
+
+
+@pytest.mark.parametrize(
+    "body,message",
+    [
+        (b"not JSON", "Expecting value"),
+        (b"[]", "must be a mapping"),
+    ],
+)
+def test_invalid_server_response(monkeypatch, benchmark_inputs, body, message):
+    import requests
+
+    response = requests.Response()
+    response.status_code = 200
+    response._content = body
+    with RoboMMEGr00tClient() as client:
+        monkeypatch.setattr(client._session, "post", lambda *args, **kwargs: response)
+        with pytest.raises(ValueError, match=message):
+            client.infer(benchmark_inputs)
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"server_url": "127.0.0.1:5555"},
+        {"server_url": "http://"},
+        {"server_url": "http://localhost:5555?query=value"},
+        {"timeout": 0},
+        {"timeout": -1},
+        {"timeout": float("inf")},
+        {"timeout": float("nan")},
+    ],
+)
+def test_invalid_client_configuration(kwargs):
+    with pytest.raises(ValueError):
+        RoboMMEGr00tClient(**kwargs)
