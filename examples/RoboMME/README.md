@@ -3,8 +3,8 @@
 The converter accepts a **local RoboMME LeRobot v2.x directory**, not a Hub
 repo ID, and does not download anything. `RoboMMEDataConfig` now connects the
 converted dataset to GR00T transforms and the existing collator. Fine-tuning
-uses `scripts/gr00t_finetune.py` directly. GPU training checks and an evaluation
-adapter are separate next steps.
+uses `scripts/gr00t_finetune.py` directly. The 10-step GPU smoke result is
+recorded below; full training and an evaluation adapter remain separate steps.
 
 ## Convert a local LeRobot v2.1 dataset (all episodes)
 
@@ -178,7 +178,109 @@ These checks use the bundled Eagle processor and real collator on CPU; no model
 weights, model forward/backward pass or GPU are needed. They verify absolute
 normalization targets, independent gripper scales, dimension masks, action
 round-trip, inference without labels, camera/language order and finite collated
-outputs. GPU training validation remains the next stage.
+outputs. The GPU smoke result is recorded below.
+
+## Extract task subsets for the five held-out checkpoints
+
+`scripts/extract_robomme_tasks.py` copies selected task families from the converted
+video dataset into a standalone v2.1 dataset. It supports the proposal's primary
+split, four leave-one-suite-out (LOSO) splits, or explicit `--tasks` /
+`--exclude-tasks` selections. Each preset below is a **training set**; the named
+held-out tasks are excluded from its files and normalization statistics.
+
+| Preset | Held-out tasks | Train episodes | Execution frames |
+| --- | --- | ---: | ---: |
+| `primary` | PickXtimes, ButtonUnmaskSwap, PickHighlight, PatternLock | 1,200 | 338,246 |
+| `loso_counting` | BinFill, PickXtimes, SwingXtimes, StopCube | 1,200 | 287,822 |
+| `loso_permanence` | VideoUnmask, VideoUnmaskSwap, ButtonUnmask, ButtonUnmaskSwap | 1,200 | 375,791 |
+| `loso_reference` | PickHighlight, VideoRepick, VideoPlaceButton, VideoPlaceOrder | 1,200 | 360,139 |
+| `loso_imitation` | MoveCube, InsertPeg, PatternLock, RouteStick | 1,200 | 406,819 |
+
+These counts were checked by indexing all 1,600 local episodes and dry-running
+all five selections in CPU allocation 66463. Each contains 12 task families and
+2,400 videos. The actual copy path was tested with small local datasets and the
+GR00T loader; the five full datasets have not been copied by the assistant.
+
+Language `task_index` identifies an instruction, not one of the 16 environments.
+The `index` command matches instructions to original HDF5 task metadata. For
+shared instructions (VideoUnmask and VideoUnmaskSwap), it also matches episode
+lengths, demo boundaries and execution state/action samples. Ambiguous matches
+are rejected. The raw HDF5 files are needed only for indexing; no images are
+decoded during this step. The generated map is bound to source metadata and
+records a complete state/action hash for each episode, verified during copying.
+
+Run from this repository **inside a CPU allocation**, using the GR00T environment.
+For example, start a shell in the current allocation with
+`srun --jobid=66463 --overlap --ntasks=1 --cpus-per-task=8 --mem=64G --pty bash`.
+Then set these paths (the dataset and index destinations are customizable):
+
+```bash
+cd /mnt/data/vhoangth2/repos/Isaac-GR00T
+export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
+ROBOMME_PYTHON=/home/vhoangth2/miniconda3/envs/gr00t/bin/python
+ROBOMME_SOURCE=/mnt/data/vhoangth2/datasets/robomme_gr00t_lerobot_v21
+ROBOMME_INDEX=/mnt/data/vhoangth2/datasets/robomme_episode_tasks_v21.json
+
+"$ROBOMME_PYTHON" -u scripts/extract_robomme_tasks.py index \
+    --source "$ROBOMME_SOURCE" \
+    --hdf5-root /mnt/data/vhoangth2/repos/robomme_policy_learning/data/robomme_data_h5 \
+    --output "$ROBOMME_INDEX"
+```
+
+Build the index once and reuse it for every extraction. An already validated
+local index is also available at `.cache/robomme_task_index_v21.json`; to reuse
+that file, set `ROBOMME_INDEX` to its absolute path and skip the `index` command.
+Both indexing and extraction refuse existing output paths.
+
+Preview the primary selection without creating a dataset:
+
+```bash
+"$ROBOMME_PYTHON" -u scripts/extract_robomme_tasks.py extract \
+    --source "$ROBOMME_SOURCE" --task-map "$ROBOMME_INDEX" \
+    --split primary \
+    --output /mnt/data/vhoangth2/datasets/robomme_primary_train_v21 \
+    --dry-run
+```
+
+To create all five independent training datasets, copy them sequentially:
+
+```bash
+for split in primary loso_counting loso_permanence loso_reference loso_imitation; do
+    "$ROBOMME_PYTHON" -u scripts/extract_robomme_tasks.py extract \
+        --source "$ROBOMME_SOURCE" --task-map "$ROBOMME_INDEX" \
+        --split "$split" --workers 4 \
+        --output "/mnt/data/vhoangth2/datasets/robomme_${split}_train_v21" || break
+done
+```
+
+For a custom subset, replace `--split primary` with e.g.
+`--tasks BinFill StopCube`, or use `--exclude-tasks PickXtimes PatternLock`.
+Named presets require a source containing all 16 task families. Explicit task
+selection also works on an extracted dataset, using its own
+`meta/episode_tasks.json` as `--task-map`.
+
+Parquet is rewritten to compact episode IDs, instruction IDs and global row
+indices. Video bytes are copied directly with `shutil.copy2`, creating separate
+files without symlinks, hard links or re-encoding. All `source_*` columns and
+subgoal annotations are retained. Episode and global state/action statistics
+(min/max/mean/std/q01/q99) are recalculated using only the selected execution
+frames. The output also includes the modality config, provenance mapping,
+canonical task index and completion manifest. The final directory appears only
+after all copying and metadata generation succeed; interrupted copies must be
+rerun from the start.
+
+The five copies contain about 9.1 GiB of video data in total, plus parquet and
+metadata. No model weights or GPU are needed. Run the extraction tests inside
+a CPU allocation with the existing GR00T environment and this checkout on
+`PYTHONPATH`:
+
+```bash
+env PYTHONPATH=/mnt/data/vhoangth2/repos/Isaac-GR00T \
+    USE_TF=0 USE_FLAX=0 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 \
+    NO_ALBUMENTATIONS_UPDATE=1 TOKENIZERS_PARALLELISM=false \
+    OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \
+    "$ROBOMME_PYTHON" -m pytest -q tests/test_extract_robomme_tasks.py
+```
 
 ## Fine-tune with the existing trainer
 
@@ -187,12 +289,18 @@ or trainer changes are needed. Run from the repository root **inside a GPU
 allocation**, using the existing GR00T environment. Preserve Slurm's
 `CUDA_VISIBLE_DEVICES`; the commands use one allocated GPU.
 
+Set `PYTHONPATH` to this checkout explicitly: the shared `gr00t` environment's
+editable installation currently points to `HAMLET-VLA`. Without the override,
+running a script file can import that repo's model/trainer instead. The override
+below applies only to the command and does not reinstall or change the environment.
+
 Start with this 10-step smoke run. The existing trainer logs every 10 steps,
 so this checks its normal logging interval and saves one checkpoint without a
 duplicate final model export:
 
 ```bash
-env USE_TF=0 USE_FLAX=0 HF_HUB_OFFLINE=1 HF_DATASETS_OFFLINE=1 \
+env PYTHONPATH=/mnt/data/vhoangth2/repos/Isaac-GR00T \
+    USE_TF=0 USE_FLAX=0 HF_HUB_OFFLINE=1 HF_DATASETS_OFFLINE=1 \
     NO_ALBUMENTATIONS_UPDATE=1 TOKENIZERS_PARALLELISM=false \
     OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 WANDB_MODE=disabled \
   /home/vhoangth2/miniconda3/envs/gr00t/bin/python -u scripts/gr00t_finetune.py \
@@ -208,15 +316,18 @@ env USE_TF=0 USE_FLAX=0 HF_HUB_OFFLINE=1 HF_DATASETS_OFFLINE=1 \
     --output-dir outputs/robomme_smoke_seed42
 ```
 
-After the smoke run succeeds, a starting full-training recipe is:
+After creating `robomme_primary_train_v21`, a starting full-training recipe for
+the primary held-out protocol is below. Initialize each fold from the original
+GR00T base model: the smoke checkpoint saw all 16 tasks and is only for debugging.
 
 ```bash
-env USE_TF=0 USE_FLAX=0 HF_HUB_OFFLINE=1 HF_DATASETS_OFFLINE=1 \
+env PYTHONPATH=/mnt/data/vhoangth2/repos/Isaac-GR00T \
+    USE_TF=0 USE_FLAX=0 HF_HUB_OFFLINE=1 HF_DATASETS_OFFLINE=1 \
     NO_ALBUMENTATIONS_UPDATE=1 TOKENIZERS_PARALLELISM=false \
     OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \
     WANDB_MODE=offline WANDB_PROJECT=gr00t-robomme WANDB_LOG_MODEL=false \
   /home/vhoangth2/miniconda3/envs/gr00t/bin/python -u scripts/gr00t_finetune.py \
-    --dataset-path /mnt/data/vhoangth2/datasets/robomme_gr00t_lerobot_v21 \
+    --dataset-path /mnt/data/vhoangth2/datasets/robomme_primary_train_v21 \
     --base-model-path /mnt/data/vhoangth2/hf_cache/hub/models--nvidia--GR00T-N1.5-3B/snapshots/869830fc749c35f34771aa5209f923ac57e4564e \
     --data-config examples.RoboMME.custom_data_config:RoboMMEDataConfig \
     --embodiment-tag new_embodiment --num-gpus 1 --seed 42 \
@@ -225,12 +336,12 @@ env USE_TF=0 USE_FLAX=0 HF_HUB_OFFLINE=1 HF_DATASETS_OFFLINE=1 \
     --save-steps 1000 --save-total-limit 2 --no-save-final-model \
     --dataloader-num-workers 2 --dataloader-prefetch-factor 2 \
     --video-backend torchvision_av --report-to wandb \
-    --output-dir outputs/robomme_train_seed42
+    --output-dir outputs/robomme_primary_seed42
 ```
 
 The full recipe has effective batch size 32 on one GPU. These hyperparameters
-are a starting point; GPU memory use, loss and checkpoint saving have not yet
-been validated on RoboMME. Both commands retain the trainer defaults: frozen
+are a starting point; the full batch size and long-run behavior have not yet
+been validated. The GPU smoke test below used batch size 2. Both commands retain the trainer defaults: frozen
 vision/language backbone, trainable projector and diffusion action head,
 bfloat16 training and TF32. Choose a GPU compatible with those defaults.
 
@@ -243,3 +354,30 @@ and the real converted dataset through `torchvision_av`, two DataLoader workers
 and `DefaultDataCollator`. It uses the first and final samples, verifying finite
 state/action tensors and masks. This validates the input path only; no model
 weights are loaded and no model forward/backward or training is run on CPU.
+
+## GPU smoke result
+
+On 2026-11-20, the existing trainer completed 10 optimizer steps in allocation
+66426 on one H100 80 GB, using batch size 2, accumulation 1 and seed 42. Logged
+loss was 0.5206, gradient norm was 3.4809, and Trainer reported 28.34 seconds
+including checkpoint saving. The full dataset was available to the sampler;
+only 20 training samples were consumed in this short run.
+
+The checkpoint contains readable safetensors shards/index (899 tensors),
+optimizer, scheduler, RNG state and `experiment_cfg/metadata.json` with the
+RoboMME normalization and modality metadata. The saved action horizon is 16 and
+the padded action dimension is 32. The extra final-model export was disabled.
+
+Local artifacts:
+
+```text
+outputs/robomme_smoke/20261120T101021Z_job66426_seed42/train.log
+outputs/robomme_smoke/20261120T101021Z_job66426_seed42/smoke_summary.json
+outputs/robomme_smoke/20261120T101021Z_job66426_seed42/checkpoint-10/
+```
+
+The initial attempt stopped before step 1 because the environment imported
+`TrainRunner` from its editable `HAMLET-VLA` installation. Setting the per-command
+`PYTHONPATH` as shown above resolved the mismatch without changing trainer code
+or reinstalling the environment. Resume execution and simulator rollouts have
+not been tested with this checkpoint.
