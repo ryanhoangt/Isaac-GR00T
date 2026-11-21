@@ -598,3 +598,55 @@ The evaluation tests use fake environments/clients and include actual MP4
 encoding/decoding, early termination, replanning, queue reset, timeouts, structured
 simulator errors and interrupted-run resume. Real checkpoint inference and a
 real RoboMME episode remain for the GPU smoke step.
+
+## GPU evaluation smoke result (adapter step 4)
+
+On 2026-11-20, the real checkpoint server and RoboMME simulator completed an
+integration smoke in allocation 66462 on an H100 80 GB. The server reused
+`scripts/inference_service.py`, `RoboMMEDataConfig`, the 10-step smoke checkpoint
+and its saved normalization metadata. Evaluation used the local benchmark clone,
+PickXtimes test episode 0, seed 42, execution horizon 16, four denoising steps and
+a deliberately short 64-step execution budget.
+
+The runner finished with exit code 0 after 64 environment steps and four
+successful HTTP action requests. The recorded outcome was `timeout` at the
+configured budget, with zero episode errors and zero cleanup errors. Evaluation
+process runtime, including simulator imports and initialization, was 25.70 seconds.
+The MP4 decoded successfully: 65 frames, 256 x 512 pixels (front and wrist views),
+10 FPS. The model server was stopped after the test; both existing training
+processes remained running. The server allocator was capped at 14% of GPU memory
+for this smoke because the primary and all-task training runs were sharing the GPU.
+
+This verifies checkpoint loading, physical action conversion, live HTTP inference,
+simulation stepping, replanning, video recording and metrics/cleanup. The checkpoint
+had trained on all 16 tasks for only 10 optimizer steps, so this is an integration
+check and **not a held-out performance result**.
+
+The simulator environment lacked `json-numpy`. For the smoke, the already
+installed `json_numpy.py` version 2.1.1 from the GR00T environment was reused in
+`.cache/robomme_eval_deps/`, without modifying either environment or the benchmark
+repo. To reuse that local dependency for evaluation on this machine, include it
+in the simulator process's `PYTHONPATH`:
+
+```bash
+export PYTHONPATH=/mnt/data/vhoangth2/repos/Isaac-GR00T:/mnt/data/vhoangth2/repos/Isaac-GR00T/.cache/robomme_eval_deps
+```
+
+Alternatively, install `json-numpy==2.1.1` in the simulator environment before
+using the normal evaluation command above. The production server and runner
+needed no source-code changes for this smoke.
+
+Local artifacts (exact launch commands are recorded in the summary):
+
+```text
+outputs/robomme_eval_smoke/20261120T232337Z_job66462/
+  smoke_summary.json
+  verification.json
+  server.log
+  evaluation.log
+  last_frame.png
+  evaluation/config.json
+  evaluation/progress.json
+  evaluation/metrics.json
+  evaluation/videos/PickXtimes_ep0000.mp4
+```
