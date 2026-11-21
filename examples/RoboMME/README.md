@@ -212,24 +212,32 @@ records a complete state/action hash for each episode, verified during copying.
 Run from this repository **inside a CPU allocation**, using the GR00T environment.
 For example, start a shell in the current allocation with
 `srun --jobid=66463 --overlap --ntasks=1 --cpus-per-task=8 --mem=64G --pty bash`.
-Then set these paths (the dataset and index destinations are customizable):
+Then set these paths, using the included index for the converted all-task dataset:
 
 ```bash
 cd /mnt/data/vhoangth2/repos/Isaac-GR00T
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
 ROBOMME_PYTHON=/home/vhoangth2/miniconda3/envs/gr00t/bin/python
 ROBOMME_SOURCE=/mnt/data/vhoangth2/datasets/robomme_gr00t_lerobot_v21
-ROBOMME_INDEX=/mnt/data/vhoangth2/datasets/robomme_episode_tasks_v21.json
+ROBOMME_INDEX=/mnt/data/vhoangth2/repos/Isaac-GR00T/examples/RoboMME/metadata/robomme_task_index_v21.json
+```
 
+The validated index is included at `metadata/robomme_task_index_v21.json`, covering
+all 1,600 episodes and 16 task families. Reuse it for extraction without HDF5;
+it remains valid after relocating the dataset because it is bound to metadata
+contents, not the directory path. HDF5 paths inside the index record provenance
+and are not opened during extraction.
+
+Only rebuild an index for a different source dataset, choosing a **new** output
+file, then point `ROBOMME_INDEX` to that file:
+
+```bash
 "$ROBOMME_PYTHON" -u scripts/extract_robomme_tasks.py index \
     --source "$ROBOMME_SOURCE" \
     --hdf5-root /mnt/data/vhoangth2/repos/robomme_policy_learning/data/robomme_data_h5 \
-    --output "$ROBOMME_INDEX"
+    --output /path/to/new_robomme_task_index.json
 ```
 
-Build the index once and reuse it for every extraction. An already validated
-local index is also available at `.cache/robomme_task_index_v21.json`; to reuse
-that file, set `ROBOMME_INDEX` to its absolute path and skip the `index` command.
 Both indexing and extraction refuse existing output paths.
 
 Preview the primary selection without creating a dataset:
