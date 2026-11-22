@@ -357,6 +357,11 @@ Use a new output directory for each fresh run. To continue an interrupted run,
 keep its recipe and output directory and add `--resume`. No command above
 submits a Slurm job or requests resources automatically.
 
+Checkpoint retention defaults to unlimited: omit `--save-total-limit` to keep
+every scheduled checkpoint. An explicit `--save-total-limit N` overrides this
+default and retains only the latest N checkpoints. Remove that flag from an
+existing command if you want to keep all checkpoints.
+
 The CPU validation in allocation 66430 checks the existing CLI argument parser
 and the real converted dataset through `torchvision_av`, two DataLoader workers
 and `DefaultDataCollator`. It uses the first and final samples, verifying finite

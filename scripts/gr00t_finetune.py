@@ -18,7 +18,7 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Literal
+from typing import List, Literal, Optional
 
 import torch
 import tyro
@@ -75,8 +75,8 @@ class ArgsConfig:
     save_strategy: Literal["steps", "epoch"] = "steps"
     """Save checkpoints every save_steps updates or at the end of each epoch."""
 
-    save_total_limit: int = 5
-    """Maximum number of checkpoints to retain."""
+    save_total_limit: Optional[int] = None
+    """Maximum number of checkpoints to retain. By default, keep all checkpoints."""
 
     save_final_model: bool = True
     """Also export model weights to output_dir after training."""
