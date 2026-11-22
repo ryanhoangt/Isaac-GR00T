@@ -44,14 +44,12 @@ def retrieve_from_memory(memory, k, tasks, queries):
     ret_pixel_values = torch.concat(ret_pixel_values)
     ret_actions = torch.concat(ret_actions)
 
-    ret_backbone_features = pad_sequence(
-        ret_backbone_features, batch_first=True, padding_side="left")
+    ret_backbone_features = pad_sequence(ret_backbone_features, batch_first=True, padding_side="left")
     ret_backbone_attention_masks = pad_sequence(
-        ret_backbone_attention_masks, batch_first=True, padding_side="left")
+        ret_backbone_attention_masks, batch_first=True, padding_side="left"
+    )
 
-    return (
-        (ret_keys, ret_pixel_values, ret_actions),
-        (ret_backbone_features, ret_backbone_attention_masks))
+    return ((ret_keys, ret_pixel_values, ret_actions), (ret_backbone_features, ret_backbone_attention_masks))
 
 
 def retrieve_from_memory_traj(memory, k, tasks, queries):
@@ -89,7 +87,7 @@ class RetrieverWrapperWithHead(BertPreTrainedModel):
 
             B, L, D = llm_embeds.shape
             llm_embeds = llm_embeds.reshape(B * L, D)
-            selected = (input_ids.reshape(B * L) == vla.backbone.eagle_model.image_token_index)
+            selected = input_ids.reshape(B * L) == vla.backbone.eagle_model.image_token_index
 
             llm_embeds[selected] = llm_embeds[selected] * 0.0 + vit_embeds.reshape(-1, D)
             llm_embeds = llm_embeds.reshape(B, L, D)
@@ -102,7 +100,12 @@ class RetrieverWrapperWithHead(BertPreTrainedModel):
         return normalize(vl_embeds, p=2, dim=-1)
 
     def compute_simclr_loss(self, vl_embeds, temperature):
-        y_pred = (vl_embeds @ vl_embeds.T) / temperature
+        if temperature <= 0:
+            raise ValueError("temperature must be positive")
+        if vl_embeds.ndim != 2 or len(vl_embeds) < 4 or len(vl_embeds) % 2:
+            raise ValueError("Expected two equal halves containing at least two positive pairs")
+        # Keep similarity logits/loss in FP32 even when encoder weights are BF16.
+        y_pred = (vl_embeds.float() @ vl_embeds.float().T) / temperature
         y_pred.fill_diagonal_(torch.finfo(y_pred.dtype).min)
-        y = torch.arange(len(vl_embeds), device=self.device).roll(len(vl_embeds) // 2)
+        y = torch.arange(len(vl_embeds), device=vl_embeds.device).roll(len(vl_embeds) // 2)
         return cross_entropy(y_pred, y)

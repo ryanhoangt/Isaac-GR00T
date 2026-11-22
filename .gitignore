@@ -128,4 +128,5 @@ output/
 outputs/ravla_eval/
 outputs/retrieval_cache/
 outputs/dtw_pairs/
+outputs/retriever/
 runs/gr00t/

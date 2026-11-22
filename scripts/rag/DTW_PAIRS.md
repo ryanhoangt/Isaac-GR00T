@@ -1,5 +1,7 @@
 # Offline DTW positive pairs for LIBERO
 
+For online retriever training with this sampler, see [TRAIN_RETRIEVER.md](TRAIN_RETRIEVER.md).
+
 The exporter calls the **unmodified**
 `gr00t.rag.utils.get_aligned_frame_ids()` function. It selects two different
 demonstrations of the same task, obtains action-DTW frame matches and exports
