@@ -1,5 +1,8 @@
 # RA-VLA retrieval viewer
 
+To inspect the retriever's **training positive candidates** from action DTW,
+use the separate [DTW pair exporter and viewer](DTW_PAIRS.md).
+
 Streamlit app for the offline caches described in [PRECOMPUTE_RETRIEVAL.md](PRECOMPUTE_RETRIEVAL.md).
 It runs on CPU and uses the existing MP4s and task memory. No policy server,
 model checkpoint loading or simulator is needed.
