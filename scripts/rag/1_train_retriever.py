@@ -38,6 +38,8 @@ class ArgsConfig:
     retriever_path: str = "models/retriever/default"
     data_config: str = DATA_CONFIG
     pretrained_model_path: str = PRETRAINED_VLA_PATH
+    task_map: str | None = None
+    """Episode-task index for one dataset; auto-load meta/episode_tasks.json when present."""
 
     num_trajs: int = 10
     num_frames: int = 20
@@ -62,6 +64,8 @@ class ArgsConfig:
 def main(config: ArgsConfig):
     if not config.dataset_paths:
         raise ValueError("Supply at least one --dataset-paths directory")
+    if config.task_map is not None and len(config.dataset_paths) != 1:
+        raise ValueError("An explicit --task-map requires a single --dataset-paths directory")
     if (
         min(
             config.num_trajs,
@@ -102,14 +106,6 @@ def main(config: ArgsConfig):
             video_backend=VIDEO_BACKEND,
             **dataset_kwargs,
         )
-        if config.num_trajs > len(dataset.task_groups):
-            raise ValueError(
-                f"num_trajs exceeds task count in {dataset_path}; the sampler may assign all groups to one suite"
-            )
-        if min(map(len, dataset.task_groups.values())) < 2:
-            raise ValueError(f"Every task needs at least two demonstrations: {dataset_path}")
-        if min(dataset.trajectory_lengths) < config.num_frames:
-            raise ValueError(f"num_frames exceeds the shortest demonstration in {dataset_path}")
         data_mixture.append((dataset, 1.0))
 
     mixture_dataset = FramePathsMixtureDataset(
@@ -117,11 +113,22 @@ def main(config: ArgsConfig):
         mode="train",
         metadata_config={"percentile_mixing_method": "weighted_average"},
     )
-    mixture_dataset.save_metadata(config.retriever_path)
-
     batch_sampler = AlignedFramesBatchSampler(
-        mixture_dataset, config.num_trajs, config.num_frames, config.num_iterations
+        mixture_dataset,
+        config.num_trajs,
+        config.num_frames,
+        config.num_iterations,
+        task_map=config.task_map,
     )
+    (output / "sampling_report.json").write_text(json.dumps(batch_sampler.sampling_report, indent=2) + "\n")
+    for report in batch_sampler.sampling_report:
+        print(
+            f"{report['dataset']}: {report['eligible_groups']}/{report['total_groups']} eligible alignment groups; "
+            f"{report['eligible_demonstrations']}/{report['total_demonstrations']} demonstrations used for pairs; "
+            f"{report['skipped_group_count']} groups skipped (dataset unchanged)",
+            flush=True,
+        )
+    mixture_dataset.save_metadata(config.retriever_path)
     collator = DefaultDataCollator()
 
     dataloader = DataLoader(

@@ -43,7 +43,10 @@ equivalent reproduction. Retriever training is step-based, independent of the
 three-epoch RA-VLA policy-training budget.
 
 Because the sampler can assign every group to one suite, `num_trajs` must not
-exceed the task count in any selected dataset (10 for each G/O/S suite).
+exceed the eligible alignment-group count in any selected dataset (10 for each
+G/O/S suite). Groups need two demonstrations with at least `num_frames` frames.
+Singletons and short demonstrations are excluded only from retriever pairing;
+dataset episodes, policy-training frames and normalization metadata are retained.
 
 ## Configuration and memory
 
@@ -53,6 +56,8 @@ Overrides include:
 
 - `--data-config`: data transform/config class.
 - `--pretrained-model-path`: a local base GR00T checkpoint or model ID.
+- `--task-map`: optional episode-to-task index for a single-dataset run; by
+  default use the dataset's `meta/episode_tasks.json` when available.
 - `--video-cache-size 2`: camera videos retained per dataset per worker.
 - `--num-workers 0`: load in the main process for debugging.
 - `LIBERO_DATA_ROOT`: root containing `libero_goal`, `libero_object`, `libero_spatial`.
@@ -69,6 +74,8 @@ machine, download the model first or set `HF_HUB_OFFLINE=0` when launching.
 The chosen `--retriever-path` contains:
 
 - `training_config.json`: settings and dataset paths.
+- `sampling_report.json`: grouping strategy, task-map fingerprint, eligible
+  group/demo counts and skipped groups/short demonstrations for each dataset.
 - `metrics.jsonl`: per-step loss, gradient norm, learning rate and batch size.
 - `metadata.pt`, `config.json`, `model.safetensors`: trained model/data metadata.
 - `completed.json`: completed steps, final loss, parameter-update check,
@@ -82,6 +89,50 @@ training resume is not supported (unlike the offline pair exporter).
 Before using a new retriever with RA-VLA, rebuild memory keys with that
 retriever. Released memory keys belong to the released retriever's embedding
 space and should not be mixed with the new model's queries.
+
+## RoboMME pairing compatibility (step 2)
+
+The retriever can read the already converted RoboMME v2.1 datasets with
+`--data-config examples.RoboMME.custom_data_config:RoboMMEDataConfig` and
+`--dataset-paths /path/to/robomme_primary_train_v21`. Its embedded task index
+is validated against the dataset metadata, and pairing groups use
+**(task family, exact instruction)**. This prevents VideoUnmask and
+VideoUnmaskSwap from being paired merely because they share an instruction.
+LIBERO retains instruction-based grouping and the original batch ordering/RNG
+behavior when its demonstrations satisfy the pairing requirements.
+
+For the local primary dataset and `--num-frames 20`, there are 99 compound
+groups: 81 eligible groups and 18 singleton groups. Only the 1,182 eligible
+demonstrations supply retriever positives; all 1,200 demonstrations remain in
+the dataset. The sampler writes the exact exclusions to `sampling_report.json`
+and never edits the source dataset or `dataset.task_groups`.
+
+For the all16 dataset, which has no embedded task index, pass the portable map:
+
+```bash
+--task-map examples/RoboMME/metadata/robomme_task_index_v21.json
+```
+
+An explicit map requires a single dataset path. Converted RoboMME datasets
+without a map are rejected rather than falling back to instruction-only grouping.
+The map's HDF5 provenance paths are not opened.
+
+DTW reads the raw action column named by modality metadata (`actions`, 8D, for
+RoboMME; `action`, 7D, for LIBERO). Its distance, path filtering and frame sampling
+are unchanged; no action normalization, dimension dropping or new positive-pair
+algorithm is introduced. The offline exporter/viewer remain LIBERO-specific
+until the next step; retriever training still computes DTW online. Changing the
+sampler utility source changes export fingerprints, so existing DTW exports stay
+viewable but re-mining/resuming requires a fresh output directory.
+
+CPU checks (run inside an allocation with this checkout on `PYTHONPATH`):
+
+```bash
+USE_TF=0 USE_FLAX=0 NO_ALBUMENTATIONS_UPDATE=1 HF_HUB_OFFLINE=1 \
+  /home/vhoangth2/miniconda3/envs/gr00t/bin/python -m pytest -q \
+  tests/test_retriever_sampling.py tests/test_dtw_pairs.py \
+  tests/test_retriever_loss.py tests/test_ravla_video_dataset.py
+```
 
 ## Validation
 

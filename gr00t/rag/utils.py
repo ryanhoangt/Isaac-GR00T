@@ -38,13 +38,32 @@ def random_distribute_n_to_k(n, k):
     return distribution
 
 
+def get_trajectory_actions(dataset, traj_id):
+    """Read raw physical actions for DTW, using the dataset's modality mapping.
+
+    LIBERO stores ``action`` and RoboMME stores ``actions``. The lightweight
+    offline exporter has no modality metadata, so accept either unambiguous
+    column there. Do not normalize, pad or change the DTW coordinate space.
+    """
+    trajectory = dataset.get_trajectory_data(traj_id)
+    metadata = getattr(dataset, "lerobot_modality_meta", None)
+    if metadata is not None:
+        columns = {field.original_key for field in metadata.action.values()}
+    else:
+        columns = {key for key in ("action", "actions") if key in trajectory}
+    if len(columns) != 1:
+        raise ValueError("DTW requires one unambiguous raw action column")
+    column = next(iter(columns))
+    if column not in trajectory:
+        raise ValueError(f"Missing raw action column: {column}")
+    actions = np.stack(trajectory[column].tolist(), dtype=np.double)
+    if actions.ndim != 2 or min(actions.shape) < 1 or not np.isfinite(actions).all():
+        raise ValueError(f"Expected nonempty finite action vectors in {column}")
+    return actions
+
+
 def _get_traj_actions(dataset, traj_ids):
-    traj_actions = []
-    for traj_id in traj_ids:
-        traj = dataset.get_trajectory_data(traj_id)
-        traj_action = np.stack(traj["action"].tolist(), dtype=np.double)
-        traj_actions.append(traj_action)
-    return traj_actions
+    return [get_trajectory_actions(dataset, traj_id) for traj_id in traj_ids]
 
 
 def get_sampling_weights(dataset, task):
@@ -99,13 +118,12 @@ def _visualize_aligned_frame_ids(dataset, traj_id1, traj_id2, frame_ids1, frame_
 
 
 def get_aligned_frame_ids(dataset, traj_id1, traj_id2, num_frames):
-    assert dataset.trajectory_ids[traj_id1] == traj_id1, "Trajectory ID != Trajectory Index"       
+    assert dataset.trajectory_ids[traj_id1] == traj_id1, "Trajectory ID != Trajectory Index"
     assert dataset.trajectory_ids[traj_id2] == traj_id2, "Trajectory ID != Trajectory Index"
 
-    traj1 = dataset.get_trajectory_data(traj_id1)
-    traj2 = dataset.get_trajectory_data(traj_id2)
-    traj_action1 = np.stack(traj1["action"].tolist(), dtype=np.double)
-    traj_action2 = np.stack(traj2["action"].tolist(), dtype=np.double)
+    traj_action1, traj_action2 = _get_traj_actions(dataset, (traj_id1, traj_id2))
+    if traj_action1.shape[1] != traj_action2.shape[1]:
+        raise ValueError("DTW trajectories must have the same action dimension")
 
     frame_pairs = dtw_ndim.warping_path(traj_action1, traj_action2)
     frame_pairs = _filter_unique_first_element(frame_pairs)
