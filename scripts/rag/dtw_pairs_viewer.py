@@ -33,11 +33,11 @@ def load_frames(path, token, indices, length):
 
 
 @st.cache_data(max_entries=8, show_spinner=False)
-def load_actions(path, token):
+def load_actions(path, token, action_column="action", state_column="observation.state"):
     import pyarrow.parquet as pq
 
-    table = pq.read_table(path, columns=["action", "observation.state"])
-    return np.array(table["action"].to_pylist()), np.array(table["observation.state"].to_pylist())
+    table = pq.read_table(path, columns=[action_column, state_column])
+    return np.array(table[action_column].to_pylist()), np.array(table[state_column].to_pylist())
 
 
 def move_pair(delta, count):
@@ -67,11 +67,24 @@ def main():
             st.info("No completed pairs yet.")
             st.stop()
         suite = st.selectbox("Suite", sorted({record["suite"] for record in records}))
-        tasks = {record["task_id"]: record["task"] for record in records if record["suite"] == suite}
-        task = st.selectbox("Task", sorted(tasks), format_func=lambda value: f"{value}: {tasks[value]}")
-        selected = {
-            record["id"]: record for record in records if record["suite"] == suite and record["task_id"] == task
+        robomme = any("instruction" in row for row in records if row["suite"] == suite)
+        tasks = {
+            record["task"] if robomme else record["task_id"]: record["task"]
+            for record in records
+            if record["suite"] == suite
         }
+        task = st.selectbox(
+            "Task", sorted(tasks), format_func=lambda value: value if robomme else f"{value}: {tasks[value]}"
+        )
+        task_records = [
+            record
+            for record in records
+            if record["suite"] == suite and (record["task"] if robomme else record["task_id"]) == task
+        ]
+        if robomme:
+            instruction = st.selectbox("Instruction", sorted({row["instruction"] for row in task_records}))
+            task_records = [row for row in task_records if row["instruction"] == instruction]
+        selected = {record["id"]: record for record in task_records}
         identity = st.selectbox(
             "Demonstration pair",
             list(selected),
@@ -91,7 +104,9 @@ def main():
         st.caption(
             f"{len(records)} demonstration pairs · {sum(len(row['frame_pairs']) for row in records):,} positive candidates"
         )
-        st.caption(f"Precompute: {metadata['status']} · held out: {metadata['held_out_suite']}")
+        st.caption(
+            f"Precompute: {metadata['status']} · held out: {metadata.get('held_out_suite') or 'not specified by export'}"
+        )
     pairs = np.array(record["frame_pairs"], dtype=int)
     baseline = np.array(record["progress_frame_pairs"], dtype=int)
     if (
@@ -107,6 +122,8 @@ def main():
         st.session_state.pair_index = 0
     count = len(pairs)
     st.subheader(record["task"])
+    if "instruction" in record:
+        st.caption(record["instruction"])
     st.info(
         "Action-DTW positive candidates, not human-verified labels. Relative progress uses the same anchor at the same percentage of the other demonstration. Neither is a retriever prediction."
     )
@@ -162,14 +179,22 @@ def main():
                 use_container_width=True,
             )
     trajectories = {}
+    schema = record.get("observation_schema", {})
     for side in ("source_a", "source_b"):
         parquet = record[side]["parquet"]
         check_source(parquet)
-        trajectories[side] = load_actions(parquet["path"], media.file_token(parquet["path"]))
+        trajectories[side] = load_actions(
+            parquet["path"],
+            media.file_token(parquet["path"]),
+            schema.get("action_column", "action"),
+            schema.get("state_column", "observation.state"),
+        )
     actions_a, state_a = trajectories["source_a"]
     actions_b, state_b = trajectories["source_b"]
 
     def distance(target):
+        if schema.get("state_metric") == "joint_rmse_rad":
+            return float(np.sqrt(np.mean((state_a[frame_a, :7] - state_b[target, :7]) ** 2)))
         return float(np.linalg.norm(state_a[frame_a, :3] - state_b[target, :3]) * 100)
 
     def rmse(target):
@@ -178,10 +203,17 @@ def main():
     metrics = st.columns(4)
     metrics[0].metric("DTW action RMSE", f"{rmse(frame_b):.4f}")
     metrics[1].metric("Progress action RMSE", f"{rmse(progress_b):.4f}")
-    metrics[2].metric("DTW end-effector distance", f"{distance(frame_b):.1f} cm")
-    metrics[3].metric("Progress end-effector distance", f"{distance(progress_b):.1f} cm")
+    if schema.get("state_metric") == "joint_rmse_rad":
+        metrics[2].metric("DTW joint-state RMSE", f"{distance(frame_b):.4f} rad")
+        metrics[3].metric("Progress joint-state RMSE", f"{distance(progress_b):.4f} rad")
+        st.caption(
+            "RoboMME state contains seven joint angles and a gripper coordinate; joint-state RMSE uses only the seven angles. Raw action RMSE mixes joint and gripper coordinates."
+        )
+    else:
+        metrics[2].metric("DTW end-effector distance", f"{distance(frame_b):.1f} cm")
+        metrics[3].metric("Progress end-effector distance", f"{distance(progress_b):.1f} cm")
     st.caption(
-        "Action similarity is what this DTW optimizes; lower action error alone does not prove correct semantic matching. End-effector distance also does not describe object state."
+        "Action similarity is what this DTW optimizes; lower action error alone does not prove correct semantic matching. Robot-state similarity also does not describe object state."
     )
     chart, actions = st.columns(2)
     with chart:
@@ -209,8 +241,11 @@ def main():
         st.caption("Sampled correspondences only; the export does not recompute or store the full DTW path.")
     with actions:
         st.subheader("Raw demonstration actions")
+        action_names = schema.get("action_names", media.ACTION_NAMES)
+        if len(action_names) != actions_a.shape[1] or actions_a.shape[1] != actions_b.shape[1]:
+            raise ValueError("Action names/dimensions disagree with exported schema")
         dimension = st.selectbox(
-            "Action dimension", list(range(7)), format_func=lambda dim: media.ACTION_NAMES[dim]
+            "Action dimension", list(range(len(action_names))), format_func=lambda dim: action_names[dim]
         )
         available = min(horizon, len(actions_a) - frame_a, len(actions_b) - frame_b, len(actions_b) - progress_b)
         traces = pd.DataFrame(

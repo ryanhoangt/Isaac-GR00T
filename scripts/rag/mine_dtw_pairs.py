@@ -1,4 +1,4 @@
-"""Export offline LIBERO positive candidates using the original RA-VLA sampler."""
+"""Export offline LIBERO/RoboMME candidates using the online RA-VLA DTW sampler."""
 
 import argparse
 from functools import lru_cache
@@ -21,12 +21,34 @@ DEFAULT_DATA = REPO / "ra-vla-official-assets/ravla_code/ravla_code_no_model/dat
 class ParquetDataset:
     """Small adapter for get_aligned_frame_ids, avoiding model/video transforms."""
 
-    def __init__(self, root):
+    def __init__(self, root, dataset_kind="libero"):
         self.root = Path(root).resolve()
+        self.dataset_path = self.root
+        self.dataset_kind = dataset_kind
         self.info = json.loads((self.root / "meta/info.json").read_text())
         self.tasks = {row["task_index"]: row["task"] for row in read_jsonl(self.root / "meta/tasks.jsonl")}
         self.episodes = {row["episode_index"]: row for row in read_jsonl(self.root / "meta/episodes.jsonl")}
         self.trajectory_ids = {episode: episode for episode in self.episodes}
+        self.trajectory_lengths = [row["length"] for row in self.episodes.values()]
+        self.task_groups = {}
+        for episode, row in self.episodes.items():
+            if len(row["tasks"]) != 1 or row["tasks"][0] not in self.tasks.values():
+                raise ValueError(f"Expected one known instruction per episode: {episode}")
+            self.task_groups.setdefault(row["tasks"][0], []).append(episode)
+        self.action_column, self.state_column, self.action_dimension = "action", "observation.state", 7
+        self.video_keys = {"External": "observation.images.image", "Wrist": "observation.images.wrist_image"}
+        self.sampling_report = None
+        if dataset_kind == "robomme":
+            modality = json.loads((self.root / "meta/modality.json").read_text())
+            for kind, expected in (("action", "actions"), ("state", "state")):
+                columns = {field["original_key"] for field in modality[kind].values()}
+                if columns != {expected} or self.info["features"][expected]["shape"] != [8]:
+                    raise ValueError(f"Expected RoboMME {expected} as a single 8D column")
+            self.action_column, self.state_column, self.action_dimension = "actions", "state", 8
+            self.video_keys = {
+                name: modality["video"][key]["original_key"]
+                for name, key in (("External", "image"), ("Wrist", "wrist_image"))
+            }
 
     def path(self, episode, kind="data_path", **kwargs):
         return self.root / self.info[kind].format(
@@ -38,7 +60,7 @@ class ParquetDataset:
         import pyarrow.parquet as pq
 
         table = pq.read_table(
-            self.path(episode), columns=["action", "observation.state", "task_index", "frame_index"]
+            self.path(episode), columns=[self.action_column, self.state_column, "task_index", "frame_index"]
         )
         if table["frame_index"].to_pylist() != list(range(len(table))):
             raise ValueError(f"Non-contiguous frame IDs: {self.path(episode)}")
@@ -48,14 +70,19 @@ class ParquetDataset:
         if tasks != set(self.episodes[episode]["tasks"]) or len(tasks) != 1:
             raise ValueError(f"Episode task disagrees with metadata: {self.path(episode)}")
         values = table.to_pandas()
-        actions = np.stack(values["action"])
-        if actions.shape != (len(table), 7) or not np.isfinite(actions).all():
-            raise ValueError(f"Expected finite 7D LIBERO actions: {self.path(episode)}")
+        actions = np.stack(values[self.action_column])
+        if actions.shape != (len(table), self.action_dimension) or not np.isfinite(actions).all():
+            raise ValueError(f"Expected finite {self.action_dimension}D actions: {self.path(episode)}")
+        state = np.stack(values[self.state_column])
+        if state.ndim != 2 or state.shape[1] < 3 or not np.isfinite(state).all():
+            raise ValueError(f"Expected finite state vectors: {self.path(episode)}")
+        if self.dataset_kind == "robomme" and state.shape != (len(table), 8):
+            raise ValueError(f"Expected 8D RoboMME state: {self.path(episode)}")
         return values
 
     def source(self, episode):
         videos = {}
-        for camera, key in (("External", "observation.images.image"), ("Wrist", "observation.images.wrist_image")):
+        for camera, key in self.video_keys.items():
             path = self.path(episode, "video_path", video_key=key)
             if path.is_file():
                 videos[camera] = stamp(path)
@@ -77,6 +104,8 @@ def record_seed(seed, identity):
 
 
 def build_plan(args):
+    if getattr(args, "dataset_kind", "libero") == "robomme":
+        return build_robomme_plan(args)
     datasets, plan, skipped = {}, [], []
     for suite in args.suites:
         dataset = datasets[suite] = ParquetDataset(args.dataset_root / suite)
@@ -121,6 +150,62 @@ def build_plan(args):
     return datasets, plan, skipped
 
 
+def build_robomme_plan(args):
+    from gr00t.rag.data import get_alignment_groups
+
+    dataset = ParquetDataset(args.dataset_path, "robomme")
+    groups, report = get_alignment_groups(dataset, args.num_frames, args.task_map)
+    if report["grouping"] != "task_and_instruction":
+        raise ValueError("RoboMME requires an episode-task index; supply --task-map")
+    dataset.sampling_report = report
+    instruction_ids = {instruction: index for index, instruction in dataset.tasks.items()}
+    if len(instruction_ids) != len(dataset.tasks):
+        raise ValueError("Instruction strings must have unique task_index IDs")
+    families = {key[0] for key in groups} | {row["task"] for row in report["skipped_groups"]}
+    if args.tasks and set(args.tasks) - families:
+        raise ValueError(f"Unknown canonical tasks: {sorted(set(args.tasks) - families)}")
+    if args.task_ids and set(args.task_ids) - set(dataset.tasks):
+        raise ValueError("Unknown instruction task IDs")
+
+    def selected(task, instruction):
+        return (not args.tasks or task in args.tasks) and (
+            args.task_ids is None or instruction_ids[instruction] in args.task_ids
+        )
+
+    keys = sorted(key for key in groups if selected(*key))
+    if args.tasks_per_suite:
+        rng = random.Random(record_seed(args.seed, "robomme"))
+        keys = sorted(rng.sample(keys, min(args.tasks_per_suite, len(keys))))
+    skipped = [
+        {"suite": "robomme", **row}
+        for row in report["skipped_groups"]
+        if selected(row["task"], row["instruction"])
+    ]
+    plan = []
+    for task, instruction in keys:
+        task_id = instruction_ids[instruction]
+        identity_prefix = f"robomme:{task}:task{task_id}"
+        pairs = list(combinations(sorted(groups[task, instruction]), 2))
+        rng = random.Random(record_seed(args.seed, identity_prefix))
+        for a, b in sorted(rng.sample(pairs, min(args.pairs_per_task, len(pairs)))):
+            identity = f"{identity_prefix}:ep{a}:ep{b}"
+            plan.append(
+                {
+                    "id": identity,
+                    "suite": "robomme",
+                    "task_id": task_id,
+                    "task": task,
+                    "instruction": instruction,
+                    "episode_a": a,
+                    "episode_b": b,
+                    "seed": record_seed(args.seed, identity),
+                }
+            )
+    if not plan:
+        raise ValueError("No eligible RoboMME demonstration pairs selected")
+    return {"robomme": dataset}, plan, skipped
+
+
 def mine_pair(dataset, item, count):
     # This is the only mining call. Keep the authors' DTW/filter/sampling intact.
     from gr00t.rag.utils import get_aligned_frame_ids
@@ -135,7 +220,7 @@ def mine_pair(dataset, item, count):
     progress = np.rint(np.asarray(frames_a) / max(source_a["length"] - 1, 1) * (source_b["length"] - 1)).astype(
         int
     )
-    return {
+    record = {
         **item,
         "dataset": str(dataset.root),
         "source_a": source_a,
@@ -144,6 +229,15 @@ def mine_pair(dataset, item, count):
         "progress_frame_pairs": [[int(a), int(b)] for a, b in zip(frames_a, progress)],
         "label_status": "action-DTW positive candidates; not human-verified",
     }
+    if dataset.dataset_kind == "robomme":
+        record["observation_schema"] = {
+            "dataset_kind": "robomme",
+            "action_column": dataset.action_column,
+            "state_column": dataset.state_column,
+            "action_names": [f"Joint {index + 1} target (rad)" for index in range(7)] + ["Gripper target"],
+            "state_metric": "joint_rmse_rad",
+        }
+    return record
 
 
 def validate_record(record, item, count):
@@ -171,12 +265,20 @@ def read_records(path, repair=False):
 
 def export(args):
     datasets, plan, skipped = build_plan(args)
-    for suite in args.suites:
+    for suite in datasets:
         selected = [item for item in plan if item["suite"] == suite]
+        groups = {(item["task"], item.get("instruction")) for item in selected}
         print(
-            f"{suite}: {len(set(item['task_id'] for item in selected))} tasks, {len(selected)} demo pairs, {len(selected) * args.num_frames} frame pairs",
+            f"{suite}: {len(groups)} alignment groups, {len(selected)} demo pairs, {len(selected) * args.num_frames} frame pairs",
             flush=True,
         )
+        if datasets[suite].sampling_report is not None:
+            report = datasets[suite].sampling_report
+            print(
+                f"Dataset: {report['eligible_groups']}/{report['total_groups']} eligible groups; "
+                f"{report['skipped_group_count']} groups skipped (dataset unchanged)",
+                flush=True,
+            )
     if args.dry_run:
         return
     sources = sorted(
@@ -195,6 +297,16 @@ def export(args):
         ],
         "sampler_sha256": hashlib.sha256((REPO / "gr00t/rag/utils.py").read_bytes()).hexdigest(),
     }
+    reports = [dataset.sampling_report for dataset in datasets.values() if dataset.sampling_report is not None]
+    if reports:
+        signature["dataset_kind"] = "robomme"
+        signature["sampling_reports"] = reports
+        signature["grouping_sha256"] = hashlib.sha256((REPO / "gr00t/rag/data.py").read_bytes()).hexdigest()
+        signature["dataset_metadata"].extend(
+            stamp(path)
+            for dataset in datasets.values()
+            for path in (dataset.root / "meta/modality.json", Path(dataset.sampling_report["task_map"]))
+        )
     fingerprint = digest(signature)
     with run_lock(args.output_dir):
         meta_path, pairs_path = args.output_dir / "metadata.json", args.output_dir / "pairs.jsonl"
@@ -213,14 +325,19 @@ def export(args):
             "schema_version": 1,
             "fingerprint": fingerprint,
             "status": "running",
-            "held_out_suite": "libero_10",
-            "algorithm": "gr00t.rag.utils.get_aligned_frame_ids (unmodified)",
+            "held_out_suite": None if reports else "libero_10",
+            "algorithm": "gr00t.rag.utils.get_aligned_frame_ids (online raw-action DTW)",
             "signature": signature,
             "planned_demo_pairs": len(plan),
             "completed_demo_pairs": len(existing),
             "num_frames_per_pair": args.num_frames,
             "skipped_tasks": skipped,
-            "note": "G/O/S demonstrations only. No retriever training or Long evaluation. Samples use raw action DTW, not visual similarity.",
+            "note": (
+                "Selected RoboMME dataset only; (canonical task, exact instruction) groups. "
+                "No held-out split inferred. No model training/evaluation."
+                if reports
+                else "G/O/S demonstrations only. No retriever training or Long evaluation. Samples use raw action DTW, not visual similarity."
+            ),
         }
         atomic_json(meta_path, metadata)
         started = time.perf_counter()
@@ -251,18 +368,32 @@ def export(args):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--dataset-root", type=Path, default=DEFAULT_DATA)
-    parser.add_argument("--suites", choices=ID_SUITES, nargs="+", default=list(ID_SUITES))
-    parser.add_argument("--task-ids", type=int, nargs="+", help="Zero-based IDs, applied to each selected suite")
+    parser.add_argument("--dataset-kind", choices=("libero", "robomme"), default="libero")
+    parser.add_argument("--dataset-path", type=Path, help="One RoboMME v2.1 dataset directory")
     parser.add_argument(
-        "--tasks-per-suite", type=int, default=0, help="0=all tasks; positive value for a small test"
+        "--task-map", type=Path, help="RoboMME episode-task index; defaults to meta/episode_tasks.json"
+    )
+    parser.add_argument("--tasks", nargs="+", help="RoboMME canonical task names (not instruction strings)")
+    parser.add_argument("--dataset-root", type=Path, default=DEFAULT_DATA)
+    parser.add_argument("--suites", choices=ID_SUITES, nargs="+")
+    parser.add_argument(
+        "--task-ids", type=int, nargs="+", help="LeRobot instruction IDs, applied to each selected dataset"
     )
     parser.add_argument(
-        "--pairs-per-task", type=int, default=10, help="Unique demonstration pairs, capped by availability"
+        "--tasks-per-suite",
+        type=int,
+        default=0,
+        help="0=all eligible groups; positive value limits groups per dataset",
+    )
+    parser.add_argument(
+        "--pairs-per-task",
+        type=int,
+        default=10,
+        help="Unique demo pairs per alignment group, capped by availability",
     )
     parser.add_argument("--num-frames", type=int, default=20, help="Positive frame pairs per demonstration pair")
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--output-dir", type=Path, default=REPO / "outputs/dtw_pairs/gos_offline")
+    parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
     if (
@@ -271,6 +402,15 @@ def main():
         or any(task < 0 for task in args.task_ids or [])
     ):
         parser.error("Counts must be positive; task IDs/task limit must be nonnegative")
+    if args.dataset_kind == "robomme":
+        if args.dataset_path is None or args.suites is not None:
+            parser.error("RoboMME requires --dataset-path and does not use --suites")
+    elif args.dataset_path is not None or args.task_map is not None or args.tasks is not None:
+        parser.error("--dataset-path, --task-map and --tasks require --dataset-kind robomme")
+    args.suites = args.suites or list(ID_SUITES)
+    args.output_dir = args.output_dir or REPO / "outputs/dtw_pairs" / (
+        "robomme_offline" if args.dataset_kind == "robomme" else "gos_offline"
+    )
     if len(set(args.suites)) != len(args.suites):
         parser.error("Duplicate suites")
     try:

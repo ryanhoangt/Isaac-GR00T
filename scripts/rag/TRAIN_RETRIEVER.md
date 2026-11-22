@@ -120,8 +120,9 @@ The map's HDF5 provenance paths are not opened.
 DTW reads the raw action column named by modality metadata (`actions`, 8D, for
 RoboMME; `action`, 7D, for LIBERO). Its distance, path filtering and frame sampling
 are unchanged; no action normalization, dimension dropping or new positive-pair
-algorithm is introduced. The offline exporter/viewer remain LIBERO-specific
-until the next step; retriever training still computes DTW online. Changing the
+algorithm is introduced. The offline exporter/viewer also support RoboMME;
+see [DTW_PAIRS.md](DTW_PAIRS.md). Their exports are optional inspection artifacts;
+retriever training still computes DTW online. Changing the
 sampler utility source changes export fingerprints, so existing DTW exports stay
 viewable but re-mining/resuming requires a fresh output directory.
 
