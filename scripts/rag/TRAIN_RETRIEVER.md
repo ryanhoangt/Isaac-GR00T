@@ -1,5 +1,7 @@
 # Train the action-aware LIBERO retriever
 
+After training, see [the fixed-policy A/B sanity check](RETRIEVER_SANITY_EVAL.md).
+
 The launcher trains on Goal/Object/Spatial and holds out Long. It uses the
 original online action-DTW sampler; it does not read the offline `pairs.jsonl`.
 GR00T is frozen and only the retriever is optimized.
