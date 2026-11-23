@@ -115,5 +115,6 @@ selective safetensors loader against the original forward path on CPU.
 On 2026-11-23, H100 smoke extraction in allocation 66728 processed source
 episodes 0 and 1001: 96 and 568 frames, including 48 and 284 demo frames.
 The cache includes all 664 frames. Per-episode cached/direct verification passed.
-Artifacts: `outputs/robomme_memory_cache_smoke_step2_verified/`. Full-dataset
-extraction and dataset/trainer/inference integration remain subsequent work.
+Artifacts: `outputs/robomme_memory_cache_smoke_step2_verified/`. The step-3
+dataset adapter is described in [MEMORY_DATASET.md](MEMORY_DATASET.md).
+Full-dataset extraction and trainer/inference integration remain subsequent work.
