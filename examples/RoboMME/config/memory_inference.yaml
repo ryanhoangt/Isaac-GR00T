@@ -1,0 +1,8 @@
+# Architecture and extraction precision come from the checkpoint, not this file.
+host: 127.0.0.1
+port: 8000
+device: cuda
+seed: 42
+denoising_steps: 4
+encode_batch_size: 16
+max_episode_frames: 4096

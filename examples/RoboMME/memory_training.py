@@ -139,7 +139,22 @@ def memory_run_record(args, dataset, memory_config, data_config, context):
         "dataloader_multiprocessing_context": context,
         "training": {key: value for key, value in launch.items() if key not in operational},
     }
-    return {"identity": identity, "identity_sha256": json_fingerprint(identity), "launch_config": launch}
+    # Embed extraction details outside the existing resume identity so old
+    # step-5 runs can resume unchanged and new checkpoints serve without cache files.
+    cache_specs = []
+    for item, component in zip(memory_datasets(dataset), components):
+        spec = {
+            "encoder": item.memory_encoder_signature,
+            "feature_spec": item._cache_manifest["feature_spec"],
+            "cache_manifest_sha256": component["cache_manifest_sha256"],
+        }
+        cache_specs.append({**spec, "spec_sha256": json_fingerprint(spec)})
+    return {
+        "identity": identity,
+        "identity_sha256": json_fingerprint(identity),
+        "launch_config": launch,
+        "cache_specs": cache_specs,
+    }
 
 
 def prepare_memory_run(args, dataset, memory_config, data_config, context, checkpoint):

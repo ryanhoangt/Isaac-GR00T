@@ -82,7 +82,7 @@ optimizer.pt / scheduler.pt / trainer_state.json / rng_state*.pth
 experiment_cfg/
   metadata.json                      # normalization/modality metadata
   memory_config.yaml                 # resolved memory YAML
-  memory_training.json               # data/cache/encoder/recipe identity
+  memory_training.json               # identity and embedded extraction specs
 ```
 
 Resume with the same command/output and `--resume`. The script pins the latest
@@ -127,4 +127,5 @@ canceled; the successful smoke used allocation 66728.
 
 Artifacts: `outputs/robomme_memory_training_smoke_step5/smoke_summary.json` and
 `outputs/robomme_memory_training_smoke_step5/train/checkpoint-3/`.
-Stateful memory inference and benchmark evaluation remain steps 6 and 7.
+Stateful memory serving/client support is described in [step 6](MEMORY_INFERENCE.md).
+Benchmark protocol selection and evaluation recipes remain step 7.
