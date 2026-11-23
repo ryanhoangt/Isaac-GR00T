@@ -1,0 +1,19 @@
+# Run from this checkout; provide --checkpoint explicitly for the served model.
+protocol: all16
+policy_type: memory
+task_group: all
+manifest: /mnt/data/vhoangth2/datasets/robomme_gr00t_lerobot_v21/manifest.json
+task_index: examples/RoboMME/metadata/robomme_task_index_v21.json
+checkpoint: null
+benchmark_root: /mnt/data/vhoangth2/repos/robomme_benchmark
+server_url: http://127.0.0.1:8001
+output_dir: outputs/robomme_eval/memory_all16_seed42
+num_episodes: 50
+exec_horizon: 16
+max_steps: 1300
+seed: 42
+server_seed: 42
+denoising_steps: 4
+timeout: 120.0
+video_fps: 10
+no_video: false

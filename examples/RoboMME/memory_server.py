@@ -10,7 +10,7 @@ from examples.RoboMME.memory_client import PROTOCOL
 from examples.RoboMME.memory_policy import EpisodeConflict
 
 
-def create_memory_app(controller):
+def create_memory_app(controller, *, server_metadata=None):
     app = FastAPI()
 
     async def decode(request):
@@ -24,7 +24,13 @@ def create_memory_app(controller):
 
     @app.get("/health")
     def health():
-        return {"status": "ok", "protocol": PROTOCOL, "stateful": True, "checkpoint": controller.checkpoint}
+        return {
+            **(server_metadata or {}),
+            "status": "ok",
+            "protocol": PROTOCOL,
+            "stateful": True,
+            "checkpoint": controller.checkpoint,
+        }
 
     @app.post("/reset")
     async def reset(request: Request):

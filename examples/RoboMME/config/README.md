@@ -39,14 +39,21 @@ window. Right-padding produces these fixed-size fields:
 
 Position features match `shared/posemb_3d.py:PosEmb3D`: concatenated sin/cos
 features for source time and 4x4 spatial grid centers at 2, 6, 10, and 14.
-These are separate from the 1D RoPE inside the planned memory-attention module.
+These are separate from the 1D RoPE inside the memory-attention module.
 The sampler reads only selected frames up to `step_idx`; it does not read future
 features, mutate the cache, or duplicate frames to fill padding slots.
 
-This YAML and its NumPy utilities do not activate memory in the existing trainer.
-For the frozen visual extractor added in step 2, see
-[`FEATURE_CACHE.md`](../FEATURE_CACHE.md). Model modulation and training/inference
-wiring are subsequent changes.
+To activate memory in training, pass the architecture YAML and completed cache
+to the fine-tuning CLI as described in [MEMORY_TRAINING.md](../MEMORY_TRAINING.md).
+The frozen visual extractor uses `cache_visual_features.yaml`; see
+[FEATURE_CACHE.md](../FEATURE_CACHE.md).
+
+`memory_inference.yaml` controls the stateful server's runtime settings.
+`eval_memory_all16.yaml` and `eval_memory_primary.yaml` control benchmark runs:
+task selection, checkpoint/endpoint, episode count, seeds and execution horizon.
+Architecture and extraction settings come from the checkpoint. See
+[MEMORY_INFERENCE.md](../MEMORY_INFERENCE.md) and
+[MEMORY_EVALUATION.md](../MEMORY_EVALUATION.md) for commands and protocol checks.
 
 Run the focused checks inside a CPU allocation with the GR00T environment:
 

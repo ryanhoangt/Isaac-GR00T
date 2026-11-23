@@ -10,6 +10,7 @@ import yaml
 
 from examples.RoboMME.memory_policy import MemoryActionPolicy, MemoryEpisodeController
 from examples.RoboMME.memory_server import create_memory_app
+from examples.RoboMME.eval_protocol import digest
 
 
 DEFAULT_CONFIG = Path(__file__).parent / "config/memory_inference.yaml"
@@ -67,7 +68,18 @@ def main():
         checkpoint=str(policy.model_path),
     )
     # One process and one model: separate servers are required for parallel episodes.
-    uvicorn.run(create_memory_app(controller), host=config["host"], port=config["port"], workers=1)
+    metadata = {
+        "runtime": config,
+        "checkpoint_config_sha256": digest(policy.model_path / "config.json"),
+        "memory_training_sha256": digest(policy.model_path / "experiment_cfg/memory_training.json"),
+        "normalization_metadata_sha256": digest(policy.model_path / "experiment_cfg/metadata.json"),
+    }
+    uvicorn.run(
+        create_memory_app(controller, server_metadata=metadata),
+        host=config["host"],
+        port=config["port"],
+        workers=1,
+    )
 
 
 if __name__ == "__main__":

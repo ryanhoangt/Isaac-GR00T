@@ -93,8 +93,9 @@ not reseed diffusion sampling; the configured seed is applied once at startup,
 matching the existing reactive server's episode-level RNG behavior.
 
 The existing reactive adapter, inference service and HTTP API are unchanged.
-Selecting this client in the benchmark runner and defining all16/held-out eval
-recipes is step 7; this step supplies the complete serving/client interface.
+The benchmark runner selects this client with `--policy-type memory`.
+[Step 7](MEMORY_EVALUATION.md) defines all16/primary YAML presets, checkpoint/server
+checks and separate seen/held-out metrics.
 
 ## Validation
 

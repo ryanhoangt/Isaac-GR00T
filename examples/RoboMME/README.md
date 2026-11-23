@@ -509,6 +509,12 @@ checkpoint inference and simulator rollout remain for the later GPU smoke step.
 
 ## Held-out evaluation entry point (adapter step 3)
 
+For FrameSamp+Modul memory checkpoints, use [memory evaluation](MEMORY_EVALUATION.md)
+and the separate `config/eval_memory_all16.yaml` / `config/eval_memory_primary.yaml`
+presets. They support all 16 test tasks, separate seen/held-out metrics and verify
+memory server/checkpoint provenance. The section below describes the original
+reactive, declared-manifest held-out interface, which remains available.
+
 `python -m examples.RoboMME.eval` runs a remote checkpoint on the `excluded_tasks`
 in the **training dataset's** extraction manifest. All integration code lives in
 this checkout. The runner imports `BenchmarkEnvBuilder` from the explicitly

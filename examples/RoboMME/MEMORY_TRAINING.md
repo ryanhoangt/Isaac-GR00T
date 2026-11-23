@@ -128,4 +128,5 @@ canceled; the successful smoke used allocation 66728.
 Artifacts: `outputs/robomme_memory_training_smoke_step5/smoke_summary.json` and
 `outputs/robomme_memory_training_smoke_step5/train/checkpoint-3/`.
 Stateful memory serving/client support is described in [step 6](MEMORY_INFERENCE.md).
-Benchmark protocol selection and evaluation recipes remain step 7.
+Benchmark protocol selection and evaluation recipes are described in
+[step 7](MEMORY_EVALUATION.md).
