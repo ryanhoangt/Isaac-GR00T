@@ -20,7 +20,8 @@ from typing import Optional
 import numpy as np
 import torch
 import transformers
-from torch.utils.data import Dataset, Sampler
+from torch.utils.data import DataLoader, Dataset, IterableDataset, Sampler
+from transformers.trainer_utils import seed_worker
 from transformers.trainer import (
     ALL_LAYERNORM_LAYERS,
     TRAINER_STATE_NAME,
@@ -64,6 +65,9 @@ class BaseSampler(Sampler):
 class DualBrainTrainer(transformers.Trainer):
     def __init__(self, **kwargs):
         self.compute_dtype = kwargs.pop("compute_dtype")
+        self.dataloader_multiprocessing_context = kwargs.pop("dataloader_multiprocessing_context", None)
+        if self.dataloader_multiprocessing_context not in (None, "spawn", "fork", "forkserver"):
+            raise ValueError("Unsupported DataLoader multiprocessing context")
         super().__init__(**kwargs)
         # Allowlist numpy globals for safe RNG state unpickling in PyTorch 2.1+
         torch.serialization.add_safe_globals(
@@ -75,6 +79,28 @@ class DualBrainTrainer(transformers.Trainer):
 
     def _get_eval_sampler(self, eval_dataset):
         return BaseSampler(eval_dataset, shuffle=False)
+
+    def get_train_dataloader(self):
+        if self.dataloader_multiprocessing_context is None or self.args.dataloader_num_workers == 0:
+            return super().get_train_dataloader()
+        if self.train_dataset is None:
+            raise ValueError("Trainer requires a training dataset")
+        # Same sampler/Accelerate path as Transformers, with an explicit worker
+        # context for native video libraries initialized in the parent process.
+        params = {
+            "batch_size": self._train_batch_size,
+            "collate_fn": self._get_collator_with_removed_columns(self.data_collator, description="training"),
+            "num_workers": self.args.dataloader_num_workers,
+            "pin_memory": self.args.dataloader_pin_memory,
+            "persistent_workers": self.args.dataloader_persistent_workers,
+            "multiprocessing_context": self.dataloader_multiprocessing_context,
+        }
+        if not isinstance(self.train_dataset, IterableDataset):
+            params.update(
+                sampler=self._get_train_sampler(), drop_last=self.args.dataloader_drop_last,
+                worker_init_fn=seed_worker, prefetch_factor=self.args.dataloader_prefetch_factor,
+            )
+        return self.accelerator.prepare(DataLoader(self.train_dataset, **params))
 
     def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
         outputs = model(inputs)

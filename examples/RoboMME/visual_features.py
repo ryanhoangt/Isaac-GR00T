@@ -152,6 +152,34 @@ def load_frozen_eagle_vision(model_path, attention_implementation="flash_attenti
     return eagle
 
 
+def memory_vision_signature(eagle, memory_config, *, compute_dtype, device_type):
+    """Inspect live vision weights/implementation without moving or casting them."""
+    signature = {
+        "vision_weights_sha256": vision_weights_sha256(eagle),
+        "vision_config": eagle.config.vision_config.to_dict(),
+        "select_layer": eagle.select_layer,
+        "use_pixel_shuffle": eagle.use_pixel_shuffle,
+        "downsample_ratio": eagle.downsample_ratio,
+        "connector_layers": eagle.mlp_connector_layers,
+        "extract_feature_sha256": hashlib.sha256(
+            inspect.getsource(type(eagle).extract_feature).encode()
+        ).hexdigest(),
+        "preprocessing": PREPROCESSING,
+        "preprocess_sha256": hashlib.sha256(inspect.getsource(preprocess_memory_images).encode()).hexdigest(),
+        "pool_sha256": hashlib.sha256(inspect.getsource(pool_visual_tokens).encode()).hexdigest(),
+        "pool_compute_dtype": "float32",
+        "compute_dtype": compute_dtype,
+        "attention_implementation": eagle.config.vision_config._attn_implementation,
+        "device_type": device_type,
+        "pool_type": memory_config["pool_type"],
+        "token_per_image": 16,
+        "image_dim": memory_config["memory_feature"]["img"]["input_dim"],
+        "torch_version": torch.__version__,
+        "transformers_version": version("transformers"),
+    }
+    return json.loads(json.dumps(signature, default=str))
+
+
 class FrozenMemoryVisionEncoder:
     def __init__(self, eagle, memory_config, *, device="cuda", compute_dtype="bfloat16"):
         if compute_dtype not in ("float32", "bfloat16", "float16"):
@@ -166,31 +194,9 @@ class FrozenMemoryVisionEncoder:
         self.dtype = getattr(torch, compute_dtype)
         self.pool_type = memory_config["pool_type"]
         self.image_dim = memory_config["memory_feature"]["img"]["input_dim"]
-        self.signature = {
-            "vision_weights_sha256": vision_weights_sha256(eagle),
-            "vision_config": eagle.config.vision_config.to_dict(),
-            "select_layer": eagle.select_layer,
-            "use_pixel_shuffle": eagle.use_pixel_shuffle,
-            "downsample_ratio": eagle.downsample_ratio,
-            "connector_layers": eagle.mlp_connector_layers,
-            "extract_feature_sha256": hashlib.sha256(
-                inspect.getsource(type(eagle).extract_feature).encode()
-            ).hexdigest(),
-            "preprocessing": PREPROCESSING,
-            "preprocess_sha256": hashlib.sha256(inspect.getsource(preprocess_memory_images).encode()).hexdigest(),
-            "pool_sha256": hashlib.sha256(inspect.getsource(pool_visual_tokens).encode()).hexdigest(),
-            "pool_compute_dtype": "float32",
-            "compute_dtype": compute_dtype,
-            "attention_implementation": eagle.config.vision_config._attn_implementation,
-            "device_type": self.device.type,
-            "pool_type": self.pool_type,
-            "token_per_image": 16,
-            "image_dim": self.image_dim,
-            "torch_version": torch.__version__,
-            "transformers_version": version("transformers"),
-        }
-        # Canonicalize dtype/config values to portable JSON and detach from mutable config objects.
-        self.signature = json.loads(json.dumps(self.signature, default=str))
+        self.signature = memory_vision_signature(
+            eagle, memory_config, compute_dtype=compute_dtype, device_type=self.device.type
+        )
         self.eagle = eagle.to(device=self.device, dtype=self.dtype).eval()
 
     @torch.inference_mode()

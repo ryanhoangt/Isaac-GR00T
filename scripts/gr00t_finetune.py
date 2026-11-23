@@ -53,6 +53,15 @@ class ArgsConfig:
     See gr00t/experiment/data_config.py for more details.
     """
 
+    memory_config: Optional[str] = None
+    """Optional FrameSamp+Modul YAML; specify together with memory_cache."""
+
+    memory_cache: Optional[str] = None
+    """Completed full-episode visual feature cache for RoboMME memory training."""
+
+    memory_max_open_episodes: int = 8
+    """Maximum cached episode memmaps open per DataLoader worker."""
+
     # Training parameters
     seed: int = 42
     """Random seed for initialization, dataset sampling, and the trainer."""
@@ -131,6 +140,9 @@ class ArgsConfig:
     dataloader_prefetch_factor: int = 4
     """Prefetch factor for data loading."""
 
+    dataloader_multiprocessing_context: Optional[Literal["spawn", "fork", "forkserver"]] = None
+    """Worker process context. Memory training defaults to spawn; vanilla keeps its existing default."""
+
     report_to: Literal["wandb", "tensorboard", "azure_ml"] = "wandb"
     """Where to report training metrics (e.g., 'wandb', 'tensorboard', 'azure_ml')."""
 
@@ -152,6 +164,8 @@ class ArgsConfig:
     def __post_init__(self):
         if not 0 <= self.seed < 2**32:
             raise ValueError("seed must be an integer between 0 and 4294967295")
+        if self.memory_max_open_episodes < 1:
+            raise ValueError("memory_max_open_episodes must be positive")
 
 
 #####################################################################################
@@ -214,22 +228,49 @@ def main(config: ArgsConfig):
     """Main training function."""
     # Seed newly initialized embodiment weights as well as the training loop.
     set_seed(config.seed)
+    memory = None
+    memory_checkpoint = None
+    dataset_type = LeRobotSingleDataset
+    memory_dataset_kwargs = {}
+    data_config_name = config.data_config
+    worker_context = config.dataloader_multiprocessing_context
+    # Keep the optional benchmark modules out of the vanilla import path.
+    if (
+        config.memory_config
+        or config.memory_cache
+        or config.data_config == "examples.RoboMME.memory_data_config:RoboMMEMemoryDataConfig"
+    ):
+        from examples.RoboMME.memory_config import load_memory_config
+        from examples.RoboMME.memory_dataset import RoboMMEMemoryDataset
+        from examples.RoboMME.memory_training import effective_data_config, resolve_memory_checkpoint
+
+        data_config_name = effective_data_config(config)
+        memory = load_memory_config(config.memory_config)
+        memory_checkpoint = resolve_memory_checkpoint(config)
+        dataset_type = RoboMMEMemoryDataset
+        memory_dataset_kwargs = {
+            "memory_cache": config.memory_cache,
+            "memory_config": memory,
+            "max_open_episodes": config.memory_max_open_episodes,
+        }
+        worker_context = worker_context or "spawn"
     # ------------ step 1: load dataset ------------
     embodiment_tag = EmbodimentTag(config.embodiment_tag)
 
     # 1.1 modality configs and transforms
-    data_config_cls = load_data_config(config.data_config)
+    data_config_cls = load_data_config(data_config_name)
     modality_configs = data_config_cls.modality_config()
     transforms = data_config_cls.transform()
 
     # 1.2 data loader: we will use either single dataset or mixture dataset
     if len(config.dataset_path) == 1:
-        train_dataset = LeRobotSingleDataset(
+        train_dataset = dataset_type(
             dataset_path=config.dataset_path[0],
             modality_configs=modality_configs,
             transforms=transforms,
             embodiment_tag=embodiment_tag,  # This will override the dataset's embodiment tag to "new_embodiment"
             video_backend=config.video_backend,
+            **memory_dataset_kwargs,
         )
     else:
         single_datasets = []
@@ -237,12 +278,13 @@ def main(config: ArgsConfig):
             assert os.path.exists(p), f"Dataset path {p} does not exist"
             ## We use the same transforms, modality configs, and embodiment tag for all datasets here,
             ## in reality, you can use dataset from different modalities and embodiment tags
-            dataset = LeRobotSingleDataset(
+            dataset = dataset_type(
                 dataset_path=p,
                 modality_configs=modality_configs,
                 transforms=transforms,
                 embodiment_tag=embodiment_tag,
                 video_backend=config.video_backend,
+                **memory_dataset_kwargs,
             )
             single_datasets.append(dataset)
 
@@ -278,7 +320,7 @@ def main(config: ArgsConfig):
 
     # Load model
     model = GR00T_N1_5.from_pretrained(
-        pretrained_model_name_or_path=config.base_model_path,
+        pretrained_model_name_or_path=memory_checkpoint or config.base_model_path,
         tune_llm=config.tune_llm,  # backbone's LLM
         tune_visual=config.tune_visual,  # backbone's vision tower
         tune_projector=config.tune_projector,  # action head's projector
@@ -291,6 +333,8 @@ def main(config: ArgsConfig):
     action_dim_mismatch = data_max_action_dim != model.action_head.config.action_dim
 
     if action_horizon_mismatch or action_dim_mismatch:
+        if memory_checkpoint:
+            raise ValueError("Resume checkpoint action dimensions/horizon differ from the training data")
         # Store old values for logging
         old_action_horizon = model.action_head.config.action_horizon
         old_action_dim = model.action_head.config.action_dim
@@ -350,6 +394,17 @@ def main(config: ArgsConfig):
             tune_projector=config.tune_projector, tune_diffusion_model=config.tune_diffusion_model
         )
 
+    if memory is not None:
+        from examples.RoboMME.memory_training import prepare_memory_run, verify_memory_cache
+
+        verify_memory_cache(model, train_dataset)
+        model.enable_memory(memory)
+        model.config.backbone_cfg.update(tune_visual=False, tune_llm=config.tune_llm)
+        model.config.action_head_cfg.update(
+            tune_projector=config.tune_projector, tune_diffusion_model=config.tune_diffusion_model
+        )
+        prepare_memory_run(config, train_dataset, memory, data_config_name, worker_context, memory_checkpoint)
+
     # Set the model's compute_dtype to bfloat16
     model.compute_dtype = "bfloat16"
     model.config.compute_dtype = "bfloat16"
@@ -376,7 +431,7 @@ def main(config: ArgsConfig):
         gradient_accumulation_steps=config.gradient_accumulation_steps,
         dataloader_num_workers=config.dataloader_num_workers,
         dataloader_pin_memory=False,
-        dataloader_prefetch_factor=config.dataloader_prefetch_factor,
+        dataloader_prefetch_factor=config.dataloader_prefetch_factor if config.dataloader_num_workers > 0 else None,
         dataloader_persistent_workers=config.dataloader_num_workers > 0,
         optim="adamw_torch",
         adam_beta1=0.95,
@@ -407,7 +462,8 @@ def main(config: ArgsConfig):
         train_dataset=train_dataset,
         model=model,
         training_args=training_args,
-        resume_from_checkpoint=config.resume,
+        resume_from_checkpoint=memory_checkpoint or config.resume,
+        dataloader_multiprocessing_context=worker_context,
     )
 
     # 2.3 run experiment

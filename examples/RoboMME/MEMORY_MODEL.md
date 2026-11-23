@@ -103,9 +103,10 @@ backbone/trainer run or a policy-performance evaluation. Peak allocated GPU
 memory was 2,928,743,424 bytes.
 
 Artifacts: `outputs/robomme_memory_model_smoke_step4/smoke_summary.json`.
-CLI training integration, encoder/cache weight matching and full-model training
-smoke remain step 5. The stateful online memory policy remains step 6; this step
-accepts already-prepared memory tensors. TensorRT deployment is not extended.
+CLI training integration, encoder/cache weight matching and full-backbone trainer
+smoke are documented in [MEMORY_TRAINING.md](MEMORY_TRAINING.md) (step 5).
+The stateful online memory policy remains step 6; this step accepts
+already-prepared memory tensors. TensorRT deployment is not extended.
 
 Run focused model checks inside a CPU allocation with this checkout on
 `PYTHONPATH`:

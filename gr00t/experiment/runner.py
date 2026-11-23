@@ -36,13 +36,15 @@ class TrainRunner:
         model: GR00T_N1_5,
         training_args: TrainingArguments,
         train_dataset: LeRobotSingleDataset | LeRobotMixtureDataset,
-        resume_from_checkpoint: bool = False,
+        resume_from_checkpoint: bool | str = False,
+        dataloader_multiprocessing_context: str | None = None,
     ):
         self.training_args = training_args
         self.output_dir = Path(training_args.output_dir)
         self.exp_cfg_dir = self.output_dir / "experiment_cfg"
         self.exp_cfg_dir.mkdir(parents=True, exist_ok=True)
         self.resume_from_checkpoint = resume_from_checkpoint
+        self.dataloader_multiprocessing_context = dataloader_multiprocessing_context
         self.train_dataset = train_dataset
         # Set up training arguments
         training_args.run_name = (
@@ -146,6 +148,7 @@ class TrainRunner:
             train_dataset=train_dataset,
             data_collator=data_collator,
             compute_dtype=compute_dtype,
+            dataloader_multiprocessing_context=self.dataloader_multiprocessing_context,
         )
 
         # Add checkpoint format callback to ensure experiment_cfg is copied to each checkpoint
