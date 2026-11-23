@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import copy
 from dataclasses import dataclass, field
 
 import torch
@@ -25,6 +26,7 @@ from transformers.feature_extraction_utils import BatchFeature
 from gr00t.model.action_head.action_encoder import SinusoidalPositionalEncoding, swish
 
 from .cross_attention_dit import DiT, SelfAttentionTransformer
+from .memory import MemoryFeatureEncoder, validate_memory_config
 
 
 class CategorySpecificLinear(nn.Module):
@@ -152,6 +154,9 @@ class FlowmatchingActionHeadConfig(PretrainedConfig):
     num_target_vision_tokens: int = field(
         default=32, metadata={"help": "Number of target vision tokens."}
     )
+    memory_config: dict | None = field(
+        default=None, metadata={"help": "Resolved optional visual memory configuration."}
+    )
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -212,7 +217,25 @@ class FlowmatchingActionHead(nn.Module):
         self.beta_dist = Beta(config.noise_beta_alpha, config.noise_beta_beta)
         self.num_timestep_buckets = config.num_timestep_buckets
         self.config = config
+        self.memory_encoder = None
         self.set_trainable_parameters(config.tune_projector, config.tune_diffusion_model)
+        if config.memory_config is not None:
+            self.enable_memory(config.memory_config)
+
+    def enable_memory(self, memory_config):
+        """Attach trainable memory paths after loading a vanilla pretrained head."""
+        memory_config = validate_memory_config(memory_config, self.model.inner_dim)
+        if self.memory_encoder is not None:
+            if memory_config != self.config.memory_config:
+                raise ValueError("Action-head memory is already enabled with a different configuration")
+            return
+        encoder = MemoryFeatureEncoder(memory_config).to(device=self.device, dtype=self.dtype)
+        self.model.enable_memory(memory_config)
+        self.memory_encoder = encoder
+        self.config.memory_config = copy.deepcopy(memory_config)
+        self.memory_encoder.requires_grad_(self.tune_diffusion_model)
+        for block in self.model.transformer_blocks:
+            block.memory_modulation.requires_grad_(self.tune_diffusion_model)
 
     def set_trainable_parameters(self, tune_projector: bool, tune_diffusion_model: bool):
         self.tune_projector = tune_projector
@@ -227,6 +250,8 @@ class FlowmatchingActionHead(nn.Module):
                 self.position_embedding.requires_grad_(False)
         if not tune_diffusion_model:
             self.model.requires_grad_(False)
+            if self.memory_encoder is not None:
+                self.memory_encoder.requires_grad_(False)
         print(f"Tune action head projector: {self.tune_projector}")
         print(f"Tune action head diffusion model: {self.tune_diffusion_model}")
         # Check if any parameters are still trainable. If not, print a warning.
@@ -252,6 +277,8 @@ class FlowmatchingActionHead(nn.Module):
                     self.position_embedding.eval()
             if not self.tune_diffusion_model:
                 self.model.eval()
+                if self.memory_encoder is not None:
+                    self.memory_encoder.eval()
 
     def sample_time(self, batch_size, device, dtype):
         sample = self.beta_dist.sample([batch_size]).to(device, dtype=dtype)
@@ -266,6 +293,31 @@ class FlowmatchingActionHead(nn.Module):
         backbone_features = self.vl_self_attention(backbone_features)
         backbone_output["backbone_features"] = backbone_features
         return backbone_output
+
+    def _prepare_memory(self, action_input, batch_size):
+        keys = ("static_image_emb", "static_pos_emb", "static_mask")
+        present = set(keys) & action_input.keys()
+        if self.memory_encoder is None:
+            if present:
+                raise ValueError("Memory fields supplied to an action head with memory disabled")
+            return {}
+        if present != set(keys):
+            raise ValueError(f"Memory-enabled action head requires {keys}")
+        config = self.config.memory_config
+        images, positions, mask = (action_input[key] for key in keys)
+        expected_images = (batch_size, config["budget"], config["memory_feature"]["img"]["input_dim"])
+        expected_positions = (batch_size, config["budget"], config["memory_feature"]["pos"]["input_dim"])
+        if tuple(images.shape) != expected_images or tuple(positions.shape) != expected_positions:
+            raise ValueError(f"Expected memory image/position shapes {expected_images} and {expected_positions}")
+        if not images.is_floating_point() or not positions.is_floating_point():
+            raise ValueError("Memory image/position features must be floating tensors")
+        if mask.dtype != torch.bool or mask.shape != images.shape[:2]:
+            raise ValueError("Memory mask must be boolean [batch,memory_tokens]")
+        images = images.masked_fill(~mask[..., None], 0)
+        positions = positions.masked_fill(~mask[..., None], 0)
+        if not torch.isfinite(images).all() or not torch.isfinite(positions).all():
+            raise ValueError("Valid memory image/position features must be finite")
+        return {"memory_tokens": self.memory_encoder(images, positions), "memory_mask": mask}
 
     def forward(self, backbone_output: BatchFeature, action_input: BatchFeature) -> BatchFeature:
         # Set frozen modules to eval
@@ -295,6 +347,7 @@ class FlowmatchingActionHead(nn.Module):
         # Get vision and language embeddings.
         vl_embs = backbone_output.backbone_features
         device = vl_embs.device
+        memory_kwargs = self._prepare_memory(action_input, vl_embs.shape[0])
 
         # Get embodiment ID.
         embodiment_id = action_input.embodiment_id
@@ -333,6 +386,7 @@ class FlowmatchingActionHead(nn.Module):
             encoder_attention_mask=vl_attn_mask,
             timestep=t_discretized,
             return_all_hidden_states=False,  # NOTE (YL): not using flare now
+            **memory_kwargs,
         )
         pred = self.action_decoder(model_output, embodiment_id)
         pred_actions = pred[:, -actions.shape[1] :]
@@ -354,6 +408,7 @@ class FlowmatchingActionHead(nn.Module):
         # Get vision and language embeddings.
         vl_embs = backbone_output.backbone_features
         embodiment_id = action_input.embodiment_id
+        memory_kwargs = self._prepare_memory(action_input, vl_embs.shape[0])
 
         # Embed state.
         state_features = self.state_encoder(action_input.state, embodiment_id)
@@ -395,6 +450,7 @@ class FlowmatchingActionHead(nn.Module):
                 hidden_states=sa_embs,
                 encoder_hidden_states=vl_embs,
                 timestep=timesteps_tensor,
+                **memory_kwargs,
             )
             pred = self.action_decoder(model_output, embodiment_id)
 

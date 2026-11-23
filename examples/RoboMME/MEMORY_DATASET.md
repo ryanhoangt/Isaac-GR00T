@@ -113,5 +113,6 @@ masks. Physical action round-trip checks passed. A second converted dataset
 containing only episode 1001 yielded 284 samples from the same cache.
 Artifacts: `outputs/robomme_memory_dataset_smoke_step3/smoke_summary.json`.
 
-This step does not connect the dataset to `gr00t_finetune.py` or add memory to
-the model. Those changes remain separate steps 4 and 5.
+The optional model path added in step 4 is documented in
+[MEMORY_MODEL.md](MEMORY_MODEL.md). Connecting this dataset/model pair to
+`gr00t_finetune.py` remains step 5.

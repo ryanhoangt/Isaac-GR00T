@@ -27,6 +27,8 @@ from diffusers.models.embeddings import (
 )
 from torch import nn
 
+from .memory import MemoryModulation, validate_memory_config
+
 
 class TimestepEncoder(nn.Module):
     def __init__(self, embedding_dim, compute_dtype=torch.float32):
@@ -101,6 +103,7 @@ class BasicTransformerBlock(nn.Module):
         self.positional_embeddings = positional_embeddings
         self.num_positional_embeddings = num_positional_embeddings
         self.norm_type = norm_type
+        self.memory_modulation = None
 
         if positional_embeddings and (num_positional_embeddings is None):
             raise ValueError(
@@ -154,6 +157,8 @@ class BasicTransformerBlock(nn.Module):
         encoder_hidden_states: Optional[torch.Tensor] = None,
         encoder_attention_mask: Optional[torch.Tensor] = None,
         temb: Optional[torch.LongTensor] = None,
+        memory_tokens: Optional[torch.Tensor] = None,
+        memory_mask: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
 
         # 0. Self-Attention
@@ -179,7 +184,10 @@ class BasicTransformerBlock(nn.Module):
             hidden_states = hidden_states.squeeze(1)
 
         # 4. Feed-forward
-        norm_hidden_states = self.norm3(hidden_states)
+        ff_input = hidden_states
+        if self.memory_modulation is not None:
+            ff_input = self.memory_modulation(hidden_states, memory_tokens, memory_mask)
+        norm_hidden_states = self.norm3(ff_input)
         ff_output = self.ff(norm_hidden_states)
 
         hidden_states = ff_output + hidden_states
@@ -212,12 +220,14 @@ class DiT(ModelMixin, ConfigMixin):
         positional_embeddings: Optional[str] = "sinusoidal",
         interleave_self_attention=False,
         cross_attention_dim: Optional[int] = None,
+        memory_config: Optional[dict] = None,
     ):
         super().__init__()
 
         self.attention_head_dim = attention_head_dim
         self.inner_dim = self.config.num_attention_heads * self.config.attention_head_dim
         self.gradient_checkpointing = False
+        self.memory_config = None
 
         # Timestep encoder
         self.timestep_encoder = TimestepEncoder(
@@ -254,10 +264,32 @@ class DiT(ModelMixin, ConfigMixin):
         self.norm_out = nn.LayerNorm(self.inner_dim, elementwise_affine=False, eps=1e-6)
         self.proj_out_1 = nn.Linear(self.inner_dim, 2 * self.inner_dim)
         self.proj_out_2 = nn.Linear(self.inner_dim, self.config.output_dim)
+        if memory_config is not None:
+            self.enable_memory(memory_config)
         print(
             "Total number of DiT parameters: ",
             sum(p.numel() for p in self.parameters() if p.requires_grad),
         )
+
+    def enable_memory(self, memory_config):
+        """Add memory modules in place without replacing any pretrained layer."""
+        memory_config = validate_memory_config(memory_config, self.inner_dim)
+        if self.memory_config is not None:
+            if memory_config != self.memory_config:
+                raise ValueError("DiT memory is already enabled with a different configuration")
+            return
+        parameter = next(self.parameters())
+        modules = [
+            MemoryModulation(self.inner_dim, memory_config).to(parameter.device, parameter.dtype)
+            for _ in self.transformer_blocks
+        ]
+        for block, module in zip(self.transformer_blocks, modules):
+            block.memory_modulation = module
+        self.memory_config = memory_config
+        # Diffusers otherwise treats a late-enabled field as its constructor
+        # default and drops it when reconstructing with from_config.
+        defaults = [name for name in self.config.get("_use_default_values", []) if name != "memory_config"]
+        self.register_to_config(memory_config=memory_config, _use_default_values=defaults)
 
     def forward(
         self,
@@ -266,7 +298,23 @@ class DiT(ModelMixin, ConfigMixin):
         timestep: Optional[torch.LongTensor] = None,
         encoder_attention_mask: Optional[torch.Tensor] = None,
         return_all_hidden_states: bool = False,
+        memory_tokens: Optional[torch.Tensor] = None,
+        memory_mask: Optional[torch.Tensor] = None,
     ):
+        memory_kwargs = {}
+        if self.memory_config is not None:
+            if memory_tokens is None or memory_mask is None:
+                raise ValueError("Memory-enabled DiT requires memory_tokens and memory_mask")
+            expected = (hidden_states.shape[0], self.memory_config["budget"], self.inner_dim)
+            if tuple(memory_tokens.shape) != expected:
+                raise ValueError(f"Expected memory tokens {expected}, got {tuple(memory_tokens.shape)}")
+            if memory_mask.dtype != torch.bool or memory_mask.shape != memory_tokens.shape[:2]:
+                raise ValueError("Memory mask must be boolean [batch,memory_tokens]")
+            if not memory_mask.any(dim=-1).all():
+                raise ValueError("Every sample needs at least one valid memory token")
+            memory_kwargs = {"memory_tokens": memory_tokens, "memory_mask": memory_mask}
+        elif memory_tokens is not None or memory_mask is not None:
+            raise ValueError("Memory supplied to a DiT with memory disabled")
         # Encode timesteps
         temb = self.timestep_encoder(timestep)
 
@@ -285,6 +333,7 @@ class DiT(ModelMixin, ConfigMixin):
                     encoder_hidden_states=None,
                     encoder_attention_mask=None,
                     temb=temb,
+                    **memory_kwargs,
                 )
             else:
                 hidden_states = block(
@@ -293,6 +342,7 @@ class DiT(ModelMixin, ConfigMixin):
                     encoder_hidden_states=encoder_hidden_states,
                     encoder_attention_mask=None,
                     temb=temb,
+                    **memory_kwargs,
                 )
             all_hidden_states.append(hidden_states)
 

@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import copy
 from dataclasses import dataclass, field
 from typing import Tuple
 
@@ -85,6 +86,11 @@ class GR00T_N1_5(PreTrainedModel):
         self.action_horizon = config.action_horizon
         self.action_dim = config.action_dim
         self.compute_dtype = config.compute_dtype
+
+    def enable_memory(self, memory_config):
+        """Enable memory after vanilla loading and persist its architecture in HF config."""
+        self.action_head.enable_memory(memory_config)
+        self.config.action_head_cfg["memory_config"] = copy.deepcopy(self.action_head.config.memory_config)
 
     def validate_inputs(self, inputs):
         # NOTE -- this should be handled internally by the model
