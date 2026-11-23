@@ -1,0 +1,24 @@
+# Port of mme_vla_suite/models/config/robomme/perceptual-framesamp-modul.yaml.
+# GR00T's DiT width is 1536, versus pi0.5's 1024: use six 256D query heads.
+budget: 512
+num_views: 1
+token_per_image: 16
+pool_type: mean
+use_pos_emb: true
+use_state_emb: false
+memory_feature:
+  img:
+    input_dim: 2048
+  pos:
+    input_dim: 768
+    hidden_dim: 768
+integration_type: modulation
+memory_token_dim: 1536
+representation_type: perceptual
+perceptual_memory:
+  type: frame_sampling
+attention:
+  num_heads: 6
+  head_dim: 256
+  rope_base: 10000
+  output_init_std: 0.002
