@@ -43,9 +43,10 @@ These are separate from the 1D RoPE inside the planned memory-attention module.
 The sampler reads only selected frames up to `step_idx`; it does not read future
 features, mutate the cache, or duplicate frames to fill padding slots.
 
-Step 1 provides the YAML and NumPy utilities only. Cache extraction, model
-modulation, and training/inference wiring are subsequent changes; this config
-does not yet activate memory in the existing trainer.
+This YAML and its NumPy utilities do not activate memory in the existing trainer.
+For the frozen visual extractor added in step 2, see
+[`FEATURE_CACHE.md`](../FEATURE_CACHE.md). Model modulation and training/inference
+wiring are subsequent changes.
 
 Run the focused checks inside a CPU allocation with the GR00T environment:
 

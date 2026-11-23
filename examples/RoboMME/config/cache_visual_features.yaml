@@ -1,0 +1,12 @@
+# Paths are resolved relative to the working directory, not this YAML file.
+source: /mnt/data/vhoangth2/datasets/Yinpei__robomme_data_lerobot
+model_path: /mnt/data/vhoangth2/hf_cache/hub/models--nvidia--GR00T-N1.5-3B/snapshots/869830fc749c35f34771aa5209f923ac57e4564e
+output: outputs/robomme_memory_features
+memory_config: examples/RoboMME/config/perceptual-framesamp-modul.yaml
+batch_size: 16
+device: cuda
+compute_dtype: bfloat16
+storage_dtype: float16
+attention_implementation: flash_attention_2
+# Re-encode first, middle and final frames in their original batch context.
+verify: true
