@@ -108,6 +108,7 @@ def test_plan_selects_only_held_out_and_hashes_metadata(protocol):
     config = evaluation.build_plan(evaluation.parse_args(protocol))
     assert config["tasks"] == ["HeldA", "HeldB"]
     assert config["training_tasks"] == ["TrainA"] and config["episode_indices"] == [0]
+    assert "policy_backend" not in config and "support_demos_per_task" not in config
     assert len(config["manifest_sha256"]) == 64
     assert set(config["test_metadata_sha256"]) == set(config["tasks"])
     subset = evaluation.build_plan(evaluation.parse_args(protocol + ["--tasks", "HeldB"]))
@@ -272,3 +273,91 @@ def test_errors_remain_in_metric_denominator(protocol):
     )
     assert metrics["complete"] and metrics["overall"]["error"] == 2
     assert metrics["overall"]["success_rate"] == 0.0
+
+
+def test_ravla_plan_uses_tcp_and_keeps_heldout_restriction(protocol):
+    config = evaluation.build_plan(evaluation.parse_args(protocol + ["--policy-backend", "ravla"]))
+    assert config["server_url"] == "tcp://127.0.0.1:8071" and config["support_demos_per_task"] == 3
+    with pytest.raises(ValueError, match="tcp://"):
+        evaluation.build_plan(
+            evaluation.parse_args(
+                protocol + ["--policy-backend", "ravla", "--server-url", "http://localhost:8000"]
+            )
+        )
+    with pytest.raises(ValueError, match="excluded from training"):
+        evaluation.build_plan(evaluation.parse_args(protocol + ["--policy-backend", "ravla", "--tasks", "TrainA"]))
+
+
+def test_ravla_evaluation_passes_task_identity_on_every_replan(protocol):
+    args = evaluation.parse_args(protocol + ["--policy-backend", "ravla", "--exec-horizon", "1"])
+    config = evaluation.build_plan(args)
+    client = FakeClient()
+    metrics = evaluation.evaluate(config, args.output_dir, client, lambda **kwargs: FakeBuilder(FakeEnv()))
+    assert metrics["complete"]
+    assert [row["canonical_task"] for row in client.requests] == ["HeldA"] * 3 + ["HeldB"] * 3
+
+
+def test_ravla_preflight_failure_happens_before_simulator_and_output(protocol, monkeypatch):
+    class Client(FakeClient):
+        parse_address = staticmethod(evaluation.RoboMMERAVLAClient.parse_address)
+
+        def __init__(self, *args, **kwargs):
+            super().__init__()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def validate_server(self, *args, **kwargs):
+            raise ValueError("missing support memory")
+
+    def forbidden(*args):
+        pytest.fail("Simulator must not load before memory preflight")
+
+    monkeypatch.setattr(evaluation, "RoboMMERAVLAClient", Client)
+    monkeypatch.setattr(evaluation, "load_benchmark", forbidden)
+    with pytest.raises(ValueError, match="missing support"):
+        evaluation.main(protocol + ["--policy-backend", "ravla"])
+    assert not evaluation.parse_args(protocol).output_dir.exists()
+
+
+def test_ravla_main_records_stable_server_identity_for_resume(protocol, monkeypatch):
+    class Client(FakeClient):
+        parse_address = staticmethod(evaluation.RoboMMERAVLAClient.parse_address)
+
+        def __init__(self, *args, **kwargs):
+            super().__init__()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def validate_server(self, checkpoint, tasks, **kwargs):
+            assert kwargs["support_demos_per_task"] == 3
+            return {
+                "checkpoint_path": checkpoint,
+                "retriever_path": "retriever",
+                "memory_path": "memory",
+                "data_config": "RoboMME",
+                "memory_key_type": "canonical_task",
+                "memory_tasks": tasks,
+                "memory_demo_counts": {task: 3 for task in tasks},
+                "k": 1,
+                "denoising_steps": 4,
+                "source_fingerprint": "stable",
+                "pid": 123,
+                "server_id": "temporary",
+            }
+
+    monkeypatch.setattr(evaluation, "RoboMMERAVLAClient", Client)
+    monkeypatch.setattr(evaluation, "load_benchmark", lambda *args: lambda **kwargs: FakeBuilder(FakeEnv()))
+    options = protocol + ["--policy-backend", "ravla"]
+    assert evaluation.main(options) == 0
+    saved = evaluation.read_json(evaluation.parse_args(protocol).output_dir / "config.json")
+    assert saved["remote_policy"]["source_fingerprint"] == "stable"
+    assert "pid" not in saved["remote_policy"] and "server_id" not in saved["remote_policy"]
+    assert evaluation.main(options + ["--resume"]) == 0

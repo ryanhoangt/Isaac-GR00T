@@ -1,5 +1,8 @@
 # RoboMME data preparation for GR00T N1.5
 
+For RA-VLA checkpoint serving, canonical task routing and evaluation, see
+[EVAL_ROBOMME.md](../../scripts/rag/EVAL_ROBOMME.md).
+
 The converter accepts a **local RoboMME LeRobot v2.x directory**, not a Hub
 repo ID, and does not download anything. `RoboMMEDataConfig` now connects the
 converted dataset to GR00T transforms and the existing collator. Fine-tuning

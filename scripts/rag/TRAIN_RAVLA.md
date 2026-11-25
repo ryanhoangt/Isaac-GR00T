@@ -90,8 +90,9 @@ flow, including K=1/K=2 and the random-context branch.
 
 W&B uses the existing policy logging options; online/offline/disabled modes
 remain supported. This step prepares policy training and checkpoint loading.
-Server-side canonical task routing and held-out RoboMME rollout integration
-remain the next step; the existing LIBERO server defaults are unchanged.
+Server-side canonical routing and the RoboMME evaluator backend are documented
+in [EVAL_ROBOMME.md](EVAL_ROBOMME.md). Separate held-out support memory remains
+to be prepared before the held-out experiment.
 
 Run CPU checks inside an allocation:
 

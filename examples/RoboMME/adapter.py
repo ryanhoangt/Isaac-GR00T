@@ -1,4 +1,4 @@
-"""Observation/action mapping and HTTP inference for the reactive RoboMME baseline.
+"""Observation/action mapping and HTTP/RA-VLA inference for reactive RoboMME.
 
 Mapping functions use only NumPy; the HTTP client lazily imports requests and
 json_numpy. Image preprocessing and state/action normalization belong to
@@ -166,4 +166,90 @@ class RoboMMEGr00tClient:
         return self
 
     def __exit__(self, *exc: Any) -> None:
+        self.close()
+
+
+class RoboMMERAVLAClient:
+    """Stateless benchmark client using RA-VLA's existing ZeroMQ service.
+
+    Canonical task identity is supplied on every request, independently of the
+    natural-language goal. No inference calls are retried or RNGs reset.
+    """
+
+    @staticmethod
+    def parse_address(server_url):
+        parsed = urlsplit(server_url)
+        if (
+            parsed.scheme != "tcp"
+            or not parsed.hostname
+            or parsed.port is None
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.path not in ("", "/")
+            or parsed.query
+            or parsed.fragment
+            or not 1 <= parsed.port <= 65535
+        ):
+            raise ValueError("RA-VLA server_url must be tcp://HOST:PORT")
+        host = f"[{parsed.hostname}]" if ":" in parsed.hostname else parsed.hostname
+        return host, parsed.port
+
+    def __init__(self, server_url="tcp://127.0.0.1:8071", *, timeout=60.0):
+        host, port = self.parse_address(server_url)
+        if not math.isfinite(timeout) or timeout <= 0:
+            raise ValueError("timeout must be positive and finite")
+        # Unlike RobotInferenceClient, this transport imports no Torch/dataset code.
+        from gr00t.eval.service import BaseInferenceClient
+
+        self._transport = BaseInferenceClient(host=host, port=port, timeout_ms=math.ceil(timeout * 1000))
+        self._closed = False
+
+    def validate_server(self, checkpoint, tasks, *, support_demos_per_task=3):
+        from pathlib import Path
+
+        info = self._transport.call_endpoint("server_info", requires_input=False)
+        if info.get("protocol") != "ravla" or info.get("memory_key_type") != "canonical_task":
+            raise ValueError("Expected a canonical-task RA-VLA server")
+        if Path(info["checkpoint_path"]).resolve() != Path(checkpoint).expanduser().resolve():
+            raise ValueError("Server checkpoint differs from the declared evaluation checkpoint")
+        missing = set(tasks) - set(info["memory_tasks"])
+        if missing:
+            raise ValueError(
+                f"Server memory is missing task banks {sorted(missing)}; build the selected support memory"
+            )
+        if any(info["memory_demo_counts"].get(task) != support_demos_per_task for task in tasks):
+            raise ValueError("Server memory demo counts differ from the evaluation support budget")
+        if info["action_horizon"] != 16 or set(info["action_keys"]) != {"action.joint_position", "action.gripper"}:
+            raise ValueError("Server action config is not RoboMME joint/gripper horizon 16")
+        return info
+
+    def infer(self, inputs):
+        task = inputs.get("canonical_task")
+        if not isinstance(task, str) or not task.strip():
+            raise ValueError("RA-VLA requires canonical_task from the environment/evaluator")
+        observation = to_gr00t_observation(inputs)
+        observation["memory_key"] = task
+        try:
+            prediction = self._transport.call_endpoint("get_action", observation)
+        except Exception:
+            # Restore the REQ socket for a future call, without replaying this request.
+            self._transport._init_socket()
+            raise
+        if not isinstance(prediction, Mapping):
+            raise ValueError("RA-VLA response must contain physical action fields")
+        return {"actions": to_robomme_actions(prediction)}
+
+    def reset(self):
+        return {"reset_finished": True}
+
+    def close(self):
+        if not self._closed:
+            self._transport.socket.close(linger=0)
+            self._transport.context.term()
+            self._closed = True
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
         self.close()

@@ -1,4 +1,4 @@
-"""Evaluate a remote GR00T baseline on the tasks excluded by a training manifest.
+"""Evaluate remote GR00T or RA-VLA on tasks excluded by a training manifest.
 
 Run with python -m examples.RoboMME.eval. Planning and fake-environment tests
 do not import RoboMME, Torch or a model. Simulator imports happen only at launch.
@@ -16,7 +16,7 @@ import time
 
 import numpy as np
 
-from examples.RoboMME.adapter import OBSERVATION_BUFFERS, RoboMMEGr00tClient
+from examples.RoboMME.adapter import OBSERVATION_BUFFERS, RoboMMEGr00tClient, RoboMMERAVLAClient
 
 
 def read_json(path):
@@ -72,6 +72,13 @@ def build_plan(args):
         raise ValueError("seed must be in [0, 2**32); timeout must be positive and finite")
     if not args.checkpoint.strip():
         raise ValueError("--checkpoint must identify the checkpoint served remotely")
+    server_url = args.server_url or (
+        "tcp://127.0.0.1:8071" if args.policy_backend == "ravla" else "http://127.0.0.1:8000"
+    )
+    if args.policy_backend == "ravla":
+        RoboMMERAVLAClient.parse_address(server_url)
+        if args.support_demos_per_task < 1:
+            raise ValueError("support-demos-per-task must be positive")
     root = args.benchmark_root.expanduser().resolve(strict=True)
     metadata_hashes = {}
     for task in tasks:
@@ -83,7 +90,7 @@ def build_plan(args):
         if set(episode_ids) - available:
             raise ValueError(f"{task}: missing test episode IDs {sorted(set(episode_ids) - available)}")
         metadata_hashes[task] = hashlib.sha256(path.read_bytes()).hexdigest()
-    return {
+    config = {
         "manifest": str(manifest_path),
         "manifest_sha256": hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
         "split": manifest.get("split"),
@@ -99,11 +106,15 @@ def build_plan(args):
         "exec_horizon": args.exec_horizon,
         "max_steps": args.max_steps,
         "seed": args.seed,
-        "server_url": args.server_url,
+        "server_url": server_url,
         "timeout": args.timeout,
         "save_video": not args.no_video,
         "video_fps": args.video_fps,
     }
+    # Preserve the existing HTTP run configuration/fingerprint for old resumes.
+    if args.policy_backend == "ravla":
+        config.update(policy_backend="ravla", support_demos_per_task=args.support_demos_per_task)
+    return config
 
 
 def open_video(path, fps):
@@ -136,6 +147,7 @@ def run_episode(
     video_path=None,
     video_fps=10,
     video_writer_factory=open_video,
+    canonical_task=None,
 ):
     """Run one episode with a fresh queue, a strict execution budget and cleanup."""
     result = {
@@ -156,6 +168,8 @@ def run_episode(
         goal = info["task_goal"]
         result["task_goal"] = goal[0] if isinstance(goal, (list, tuple)) else goal
         inputs = {"task_goal": goal, "is_first_step": True, **{key: list(obs[key]) for key in OBSERVATION_BUFFERS}}
+        if canonical_task is not None:
+            inputs["canonical_task"] = canonical_task
         if video_path is not None:
             writer = video_writer_factory(video_path, video_fps)
             result["video_path"] = str(video_path)
@@ -282,6 +296,7 @@ def evaluate(config, output, client, builder_factory, *, resume=False, video_wri
                 video_path=video_path,
                 video_fps=config["video_fps"],
                 video_writer_factory=video_writer_factory,
+                canonical_task=task if config.get("policy_backend") == "ravla" else None,
             )
             result["task"] = task
             episodes.append(result)
@@ -317,7 +332,9 @@ def parse_args(argv=None):
     parser.add_argument("--checkpoint", required=True, help="Identity/path of the checkpoint served remotely")
     parser.add_argument("--benchmark-root", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
-    parser.add_argument("--server-url", default="http://127.0.0.1:8000")
+    parser.add_argument("--policy-backend", choices=("gr00t", "ravla"), default="gr00t")
+    parser.add_argument("--server-url", help="HTTP URL for GR00T, tcp://HOST:PORT for RA-VLA")
+    parser.add_argument("--support-demos-per-task", type=int, default=3, help="RA-VLA support budget to validate")
     parser.add_argument("--tasks", nargs="+", help="Optional subset of the manifest's held-out tasks")
     selection = parser.add_mutually_exclusive_group()
     selection.add_argument("--num-episodes", type=int, default=50)
@@ -339,8 +356,28 @@ def main(argv=None):
     if args.dry_run:
         print(json.dumps(config, indent=2))
         return 0
-    builder = load_benchmark(config["benchmark_root"], config["seed"])
-    with RoboMMEGr00tClient(config["server_url"], timeout=config["timeout"]) as client:
+    client_cls = RoboMMERAVLAClient if config.get("policy_backend") == "ravla" else RoboMMEGr00tClient
+    with client_cls(config["server_url"], timeout=config["timeout"]) as client:
+        if config.get("policy_backend") == "ravla":
+            info = client.validate_server(
+                config["checkpoint"], config["tasks"], support_demos_per_task=config["support_demos_per_task"]
+            )
+            config["remote_policy"] = {
+                key: info[key]
+                for key in (
+                    "checkpoint_path",
+                    "retriever_path",
+                    "memory_path",
+                    "data_config",
+                    "memory_key_type",
+                    "memory_tasks",
+                    "memory_demo_counts",
+                    "k",
+                    "denoising_steps",
+                    "source_fingerprint",
+                )
+            }
+        builder = load_benchmark(config["benchmark_root"], config["seed"])
         metrics = evaluate(config, args.output_dir, client, builder, resume=args.resume)
     print(json.dumps(metrics, indent=2))
     return int(metrics["overall"]["error"] > 0 or metrics["overall"]["cleanup_errors"] > 0)
