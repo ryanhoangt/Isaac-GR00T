@@ -85,10 +85,9 @@ merge their banks. Candidate text is the actual demo instruction, not the
 canonical task name. The existing retrieval function already accepts these
 string keys and preserves top-K retrieval within each bank.
 
-The current RA-VLA policy-training collator and server still supply instruction
-keys and use LIBERO configuration. Wiring canonical task IDs/data configuration
-through those callers is the next integration step; building this file alone
-does not complete policy training/evaluation support. Held-out support memory
+The policy-training dataset/collator and configurable trainer now pass canonical
+keys; see [TRAIN_RAVLA.md](TRAIN_RAVLA.md). Server-side canonical routing and
+RoboMME rollout support remain the next integration step. Held-out support memory
 is built separately from selected support demonstrations, with no weight updates
 or inclusion of evaluation-query trajectories.
 

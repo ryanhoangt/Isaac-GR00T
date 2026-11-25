@@ -23,6 +23,7 @@ def trainer(monkeypatch):
         def __init__(self):
             super().__init__()
             self.linear = torch.nn.Linear(1, 1)
+            self.backbone = torch.nn.Linear(1, 1).requires_grad_(False)
             self.config = SimpleNamespace()
             self.calls = 0
             self.fail_on = None
@@ -54,15 +55,21 @@ def trainer(monkeypatch):
             pass
 
     class Mixture(Dataset):
+        memory_key_type = "instruction"
+
         def save_metadata(self, path):
             Path(path).mkdir(parents=True, exist_ok=True)
 
     monkeypatch.setattr(module, "CachedLeRobotSingleDataset", Dataset)
     monkeypatch.setattr(module, "BoundedLeRobotVideoDataset", Dataset)
     monkeypatch.setattr(module, "FramePathsMixtureDataset", Mixture)
-    monkeypatch.setattr(module, "RAVLADataCollator", lambda: None)
+    monkeypatch.setattr(module, "RAVLADataCollator", lambda **kwargs: None)
+    monkeypatch.setattr(module, "set_training_metadata", lambda *args: None)
+    monkeypatch.setattr(module, "load_training_memory", lambda *args: ({}, {"candidates": 0}))
     monkeypatch.setattr(module, "DataLoader", lambda *a, **k: [torch.tensor([[float(i)]]) for i in (1, 2, 3)])
-    monkeypatch.setattr(module, "RetrieverWrapperWithHead", SimpleNamespace(from_pretrained=lambda *a, **k: TinyVLA()))
+    monkeypatch.setattr(
+        module, "RetrieverWrapperWithHead", SimpleNamespace(from_pretrained=lambda *a, **k: TinyVLA())
+    )
     monkeypatch.setattr(module, "RAVLA", TinyVLA)
     monkeypatch.setattr(module.torch, "load", lambda *a, **k: {})
     monkeypatch.setattr(module.torch.cuda, "is_available", lambda: False)
@@ -103,8 +110,13 @@ def install_wandb(monkeypatch):
 
 def config(trainer, path, **kwargs):
     return trainer.ArgsConfig(
-        vla_path=str(path), dataset_paths=["source"], seed=42,
-        num_epochs=1, num_workers=0, log_freq=2, **kwargs,
+        vla_path=str(path),
+        dataset_paths=["source"],
+        seed=42,
+        num_epochs=1,
+        num_workers=0,
+        log_freq=2,
+        **kwargs,
     )
 
 
@@ -173,6 +185,25 @@ def test_sparse_logs_flush_at_each_epoch_end(trainer, monkeypatch, tmp_path):
     assert calls[0]["name"] == "gos_seed42"
     assert [e["global_step"] for e in run.metrics if "train/loss" in e] == [1, 3, 6]
     assert [e["epoch"] for e in run.metrics if "epoch/loss" in e] == [1, 2]
+
+
+def test_step_budget_overrides_epochs_and_saves_partial_checkpoint(trainer, tmp_path):
+    result = trainer.main(config(trainer, tmp_path, wandb_enable=False, max_steps=5))
+    assert result["optimizer_steps"] == 5 and result["completed_epochs"] == 1
+    assert result["partial_epoch"]
+    assert (tmp_path / "checkpoint_1/tiny_model.pt").is_file()
+    assert (tmp_path / "checkpoint_step_5/tiny_model.pt").is_file()
+    records = [json.loads(line) for line in (tmp_path / "metrics.jsonl").read_text().splitlines()]
+    assert [row["step"] for row in records] == [1, 2, 3, 4, 5]
+    assert result["retriever_frozen"] and result["retriever_sample_unchanged"]
+    assert result["backbone_frozen"] and result["backbone_sample_unchanged"]
+
+
+def test_existing_training_run_is_not_overwritten(trainer, tmp_path):
+    (tmp_path / "training_config.json").write_text("preserve me")
+    with pytest.raises(FileExistsError, match="already exists"):
+        trainer.main(config(trainer, tmp_path, wandb_enable=False))
+    assert (tmp_path / "training_config.json").read_text() == "preserve me"
 
 
 @pytest.mark.parametrize("cache_video", [False, True])

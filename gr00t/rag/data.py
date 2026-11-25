@@ -90,11 +90,28 @@ def get_alignment_groups(dataset, num_frames, task_map=None):
 
 
 class FramePathsMixtureDataset(LeRobotMixtureDataset):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, memory_task_keys=False, task_map=None, **kwargs):
         super().__init__(*args, **kwargs)
         self._all_frame_paths = self._get_all_frame_paths()
         self._all_frame_paths_inverted = {
-            frame_path: index for index, frame_path in enumerate(self.all_frame_paths)}
+            frame_path: index for index, frame_path in enumerate(self.all_frame_paths)
+        }
+        if task_map is not None and (not memory_task_keys or len(self.datasets) != 1):
+            raise ValueError("An explicit task map requires one dataset with memory_task_keys enabled")
+        mappings = (
+            [_alignment_task_names(dataset, task_map) for dataset in self.datasets]
+            if memory_task_keys
+            else [(None, None) for _ in self.datasets]
+        )
+        self.memory_task_owners = [owners for owners, _ in mappings]
+        self.memory_task_map_paths = [path for _, path in mappings]
+        modes = {"canonical_task" if owners is not None else "instruction" for owners, _ in mappings}
+        if len(modes) != 1:
+            raise ValueError("Cannot mix canonical-task and instruction-keyed datasets")
+        self.memory_key_type = modes.pop()
+        self.required_memory_keys = set()
+        for dataset, owners in zip(self.datasets, self.memory_task_owners):
+            self.required_memory_keys.update(owners.values() if owners is not None else dataset.task_groups)
 
     @property
     def all_frame_paths(self):
@@ -117,7 +134,11 @@ class FramePathsMixtureDataset(LeRobotMixtureDataset):
     def __getitem__(self, index: int):
         dataset_id, traj_id, frame_id = self.all_frame_paths[index]
         dataset = self.datasets[dataset_id]
-        return dataset.transforms(dataset.get_step_data(traj_id, frame_id))
+        feature = dataset.transforms(dataset.get_step_data(traj_id, frame_id))
+        owners = self.memory_task_owners[dataset_id]
+        if owners is not None:
+            feature["memory_key"] = owners[int(traj_id)]
+        return feature
 
 
 class AlignedFramesBatchSampler(Sampler[List[int]]):
