@@ -46,7 +46,7 @@ Raw demo ID and simulator initial-state fingerprint.
 Global and per-episode state/action statistics are computed from exported float32
 rows. The canonical all-task dataset's statistics include all ten tasks.
 **Recompute normalization on each training fold before held-out experiments**;
-fold extraction is the next unit.
+the [unit-3 fold extractor](FOLDS.md) handles this and copies standalone datasets.
 
 ## Run the full conversion yourself
 

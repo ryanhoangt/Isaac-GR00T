@@ -3,9 +3,10 @@
 This directory extends the existing [`examples/Libero`](../Libero) support.
 Unit 1 defines task identity and the proposal's two task folds, and audits the
 downloaded Full/Raw sources. Unit 2 adds [audited HDF5-to-LeRobot conversion](CONVERSION.md)
-using the existing LIBERO data configuration. Fold extraction, training and
-rollout integration are subsequent units. No simulator, model weights or GPU
-are needed for source audit or conversion.
+using the existing LIBERO data configuration. Unit 3 adds
+[standalone copied training folds](FOLDS.md) with their own normalization.
+Training and rollout integration follow. No simulator, model weights or GPU
+are needed for source audit, conversion or fold extraction.
 
 Sources:
 
