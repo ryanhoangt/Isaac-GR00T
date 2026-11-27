@@ -10,7 +10,7 @@ from transformers.trainer_utils import get_last_checkpoint
 
 from examples.RoboMME.feature_cache import file_sha256, json_fingerprint, write_json_atomic
 from examples.RoboMME.memory_dataset import RoboMMEMemoryDataset
-from examples.RoboMME.visual_features import memory_vision_signature
+from examples.RoboMME.visual_features import memory_vision_signature, validate_memory_vision_signature
 
 
 MEMORY_DATA_CONFIG = "examples.RoboMME.memory_data_config:RoboMMEMemoryDataConfig"
@@ -78,9 +78,8 @@ def verify_memory_cache(model, dataset):
         actual = memory_vision_signature(
             eagle, item.memory_config, compute_dtype=cached["compute_dtype"], device_type=cached["device_type"]
         )
-        if actual != cached:
-            changed = sorted(key for key in set(actual) | set(cached) if actual.get(key) != cached.get(key))
-            raise ValueError(f"Loaded model and memory cache differ: {', '.join(changed)}")
+        validate_memory_vision_signature(actual, cached, mismatch_context="Loaded model and memory cache differ")
+
 
 
 def memory_run_record(args, dataset, memory_config, data_config, context):

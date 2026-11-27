@@ -11,6 +11,7 @@ import inspect
 import json
 import math
 from pathlib import Path
+import warnings
 
 import numpy as np
 import torch
@@ -212,3 +213,21 @@ class FrozenMemoryVisionEncoder:
         if not np.isfinite(result).all():
             raise ValueError("Encoder produced non-finite visual features")
         return result
+
+
+def validate_memory_vision_signature(actual, expected, *, mismatch_context):
+    """Require matching extraction signatures, allowing a PyTorch version change."""
+    changed = {
+        key
+        for key in actual.keys() | expected.keys()
+        if key not in actual or key not in expected or actual[key] != expected[key]
+    }
+    if changed == {"torch_version"} and "torch_version" in actual and "torch_version" in expected:
+        warnings.warn(
+            f"Memory cache was extracted with PyTorch {expected['torch_version']}; "
+            f"this process uses PyTorch {actual['torch_version']}. "
+            "Frozen visual features may differ numerically across versions.",
+            stacklevel=3,
+        )
+    elif changed:
+        raise ValueError(f"{mismatch_context}: {', '.join(sorted(changed))}")

@@ -17,7 +17,12 @@ from examples.RoboMME.feature_cache import file_sha256, json_fingerprint
 from examples.RoboMME.memory_client import PROTOCOL
 from examples.RoboMME.memory_config import prepare_frame_sampling, validate_memory_config
 from examples.RoboMME.memory_data_config import RoboMMEMemoryDataConfig
-from examples.RoboMME.visual_features import memory_vision_signature, pool_visual_tokens, preprocess_memory_images
+from examples.RoboMME.visual_features import (
+    memory_vision_signature,
+    pool_visual_tokens,
+    preprocess_memory_images,
+    validate_memory_vision_signature,
+)
 from gr00t.model.gr00t_n1 import GR00T_N1_5
 from gr00t.model.policy import Gr00tPolicy
 
@@ -129,9 +134,9 @@ class MemoryActionPolicy(Gr00tPolicy):
             compute_dtype=expected["compute_dtype"],
             device_type=expected["device_type"],
         )
-        if actual != expected:
-            changed = sorted(key for key in set(actual) | set(expected) if actual.get(key) != expected.get(key))
-            raise ValueError(f"Checkpoint vision/extraction differs from training: {', '.join(changed)}")
+        validate_memory_vision_signature(
+            actual, expected, mismatch_context="Checkpoint vision/extraction differs from training"
+        )
         self.model = model.to(device=self._memory_device, dtype=self._memory_dtype)
 
     @torch.inference_mode()

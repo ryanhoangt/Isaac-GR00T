@@ -198,6 +198,9 @@ def test_live_cache_signature_matches_and_detects_weights_or_implementation(setu
     args, model, memory = setup_training
     dataset = make_dataset(args, memory)
     verify_memory_cache(model, dataset)
+    dataset.memory_encoder_signature["torch_version"] = "0.0.0+test"
+    with pytest.warns(UserWarning, match="Memory cache was extracted with PyTorch"):
+        verify_memory_cache(model, dataset)
     with torch.no_grad():
         model.backbone.eagle_model.mlp1[0].bias.add_(1)
     with pytest.raises(ValueError, match="vision_weights_sha256"):
