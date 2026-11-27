@@ -14,6 +14,12 @@ from examples.Libero_Mem.episode import LiberoMemEpisodeProtocol
 RESET_PROTOCOL = "libero_mem_compiled_xml_roundtrip_v1"
 
 
+def _module_from_checkout(module, root):
+    filename = getattr(module, "__file__", None)
+    paths = [filename] if filename else list(getattr(module, "__path__", ()))
+    return bool(paths) and all(Path(path).resolve().is_relative_to(root) for path in paths)
+
+
 def initialize_episode(env, initial_state, *, num_steps_wait=20):
     """Match the benchmark's DeterministicInitWrapper before installing Raw state.
 
@@ -50,11 +56,8 @@ def configure_runtime(config, output):
         ("robomimic", "thirdparty/robomimic"),
     ):
         loaded = sys.modules.get(name)
-        if loaded is not None and (
-            not getattr(loaded, "__file__", None)
-            or not Path(loaded.__file__).resolve().is_relative_to(repo / relative)
-        ):
-            raise ValueError(f"{name} already imported from another checkout; start a fresh replay process")
+        if loaded is not None and not _module_from_checkout(loaded, repo / relative):
+            raise ValueError(f"{name} already imported from another checkout; start a fresh rollout process")
     sys.path[:0] = [str(repo), str(repo / "thirdparty/robosuite"), str(repo / "thirdparty/robomimic")]
     os.environ["MUJOCO_GL"] = config.renderer
     os.environ["PYOPENGL_PLATFORM"] = config.renderer

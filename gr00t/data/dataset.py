@@ -988,6 +988,7 @@ class LeRobotMixtureDataset(Dataset):
         metadata_config: dict = {
             "percentile_mixing_method": "min_max",
         },
+        balanced_primary_batches: bool = False,
     ):
         """
         Initialize the mixture dataset.
@@ -1009,6 +1010,7 @@ class LeRobotMixtureDataset(Dataset):
         self.balance_trajectory_weights = balance_trajectory_weights
         self.seed = seed
         self.mode = mode
+        self.balanced_primary_batches = balanced_primary_batches
 
         # Set properties for sampling
 
@@ -1036,6 +1038,10 @@ class LeRobotMixtureDataset(Dataset):
             raise ValueError(
                 "No primary dataset found, please at least set one dataset's weight to 1.0"
             )
+        if self.balanced_primary_batches and not np.isclose(
+            self._dataset_sampling_weights[self._primary_dataset_indices].sum(), 0.5
+        ):
+            raise ValueError("Balanced primary batches require primary datasets to have probability 0.5")
 
         # Set the epoch and sample the first epoch
         self.set_epoch(0)
@@ -1081,7 +1087,7 @@ class LeRobotMixtureDataset(Dataset):
         self.epoch = epoch
         # self.sampled_steps = self.sample_epoch()
 
-    def sample_step(self, index: int) -> tuple[LeRobotSingleDataset, int, int]:
+    def sample_step(self, index: int, primary: bool | None = None) -> tuple[LeRobotSingleDataset, int, int]:
         """Sample a single step from the dataset."""
         # return self.sampled_steps[index]
 
@@ -1090,7 +1096,11 @@ class LeRobotMixtureDataset(Dataset):
         rng = np.random.default_rng(seed)
 
         # Sample dataset
-        dataset_index = rng.choice(len(self.datasets), p=self.dataset_sampling_weights)
+        probabilities = self.dataset_sampling_weights
+        if primary is not None:
+            probabilities = probabilities * (self.primary_dataset_indices == primary)
+            probabilities = probabilities / probabilities.sum()
+        dataset_index = rng.choice(len(self.datasets), p=probabilities)
         dataset = self.datasets[dataset_index]
 
         # Sample trajectory
@@ -1126,6 +1136,18 @@ class LeRobotMixtureDataset(Dataset):
                 self.primary_dataset_indices
             ].max()
         )
+
+    def __getitems__(self, indices: list[int]) -> list[dict]:
+        """Optional exact 50/50 primary/auxiliary microbatches via PyTorch's batched fetch."""
+        if not self.balanced_primary_batches:
+            return [self[index] for index in indices]
+        if len(indices) % 2:
+            raise ValueError("Balanced primary batches require an even microbatch size")
+        samples = []
+        for position, index in enumerate(indices):
+            dataset, trajectory, step = self.sample_step(index, primary=position < len(indices) // 2)
+            samples.append(dataset.transforms(dataset.get_step_data(trajectory, step)))
+        return samples
 
     @staticmethod
     def compute_overall_statistics(

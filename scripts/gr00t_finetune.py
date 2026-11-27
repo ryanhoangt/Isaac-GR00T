@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import os
+import math
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -161,11 +162,25 @@ class ArgsConfig:
     balance_trajectory_weights: bool = True
     """Used in LeRobotMixtureDataset. If True, sample trajectories within a dataset weighted by their length; otherwise, equal weighting."""
 
+    dataset_weights: Optional[List[float]] = None
+    """Optional positive mixture weights ordered like dataset_path; one weight must equal 1."""
+
+    balanced_primary_batches: bool = False
+    """Exactly half each microbatch from weight-1 datasets, half from auxiliary datasets."""
+
     def __post_init__(self):
         if not 0 <= self.seed < 2**32:
             raise ValueError("seed must be an integer between 0 and 4294967295")
         if self.memory_max_open_episodes < 1:
             raise ValueError("memory_max_open_episodes must be positive")
+        if self.dataset_weights is not None and (
+            len(self.dataset_weights) != len(self.dataset_path)
+            or any(not math.isfinite(weight) or weight <= 0 for weight in self.dataset_weights)
+            or 1.0 not in self.dataset_weights
+        ):
+            raise ValueError("dataset_weights must match dataset_path, be positive/finite, and include weight 1")
+        if self.balanced_primary_batches and (len(self.dataset_path) < 2 or self.batch_size % 2):
+            raise ValueError("Balanced primary batches need multiple datasets and an even batch_size")
 
 
 #####################################################################################
@@ -290,8 +305,8 @@ def main(config: ArgsConfig):
 
         train_dataset = LeRobotMixtureDataset(
             data_mixture=[
-                (dataset, 1.0)  # we will use equal weights for all datasets
-                for dataset in single_datasets
+                (dataset, weight)
+                for dataset, weight in zip(single_datasets, config.dataset_weights or [1.0] * len(single_datasets))
             ],
             mode="train",
             balance_dataset_weights=config.balance_dataset_weights,
@@ -300,6 +315,7 @@ def main(config: ArgsConfig):
             metadata_config={
                 "percentile_mixing_method": "weighted_average",
             },
+            balanced_primary_batches=config.balanced_primary_batches,
         )
         print(f"Loaded {len(single_datasets)} datasets, with {config.dataset_path} ")
 

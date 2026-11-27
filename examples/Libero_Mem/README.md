@@ -8,7 +8,9 @@ using the existing LIBERO data configuration. Unit 3 adds
 Unit 4 adds [sequence-aware episode accounting and audited expert replay](EXPERT_REPLAY.md)
 on the existing LIBERO environment/image/video helpers. Unit 5 adds
 [GR00T HTTP policy rollouts](EVALUATION.md), shared LIBERO mapping, action chunking,
-fold/task selection and grouped metrics. Training integration follows.
+fold/task selection and grouped metrics. Unit 6 adds
+[two-fold baseline training](TRAINING.md), including exact 50/50 auxiliary LIBERO
+co-training, reproducible manifests and checkpoint validation.
 No simulator, model weights or GPU are needed
 for source audit, conversion or fold extraction; expert replay runs on CPU with OSMesa.
 
