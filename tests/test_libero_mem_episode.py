@@ -14,6 +14,7 @@ import numpy as np
 import pytest
 
 from examples.Libero_Mem.episode import LiberoMemEpisodeProtocol
+from examples.Libero_Mem.environment import RESET_PROTOCOL, initialize_episode
 from examples.Libero_Mem import replay
 from examples.Libero_Mem.source import vector_fingerprint
 from examples.Libero_Mem.tasks import TASK_BY_NUMBER
@@ -57,13 +58,35 @@ class Env:
         self.closed = False
         self.scored_actions = 0
         self.calls = 0
-        self.sim = SimpleNamespace(get_state=lambda: SimpleNamespace(flatten=lambda: np.zeros(dim)))
+        self.events = []
+        self.state = np.arange(dim, dtype=np.float64)
+        self.sim = SimpleNamespace(
+            get_state=lambda: SimpleNamespace(flatten=lambda: self.state),
+            model=SimpleNamespace(get_xml=lambda: "<compiled_model/>"),
+            reset=self.reset_sim,
+            set_state_from_flattened=self.restore_state,
+            forward=lambda: self.events.append("forward"),
+        )
+
+    def reset_sim(self):
+        self.events.append("reset_sim")
+        self.state[:] = 0
+
+    def restore_state(self, state):
+        self.events.append("restore_state")
+        self.restored_state = np.array(state, copy=True)
+        self.state[:] = state
+
+    def reset_from_xml_string(self, xml):
+        self.events.append(("reload_xml", xml))
 
     def reset(self):
+        self.events.append("reset_env")
         self.scored_actions = self.calls = 0
         return {}
 
     def set_init_state(self, state):
+        self.events.append("install_raw_state")
         self.initial = np.array(state, copy=True)
         return {}
 
@@ -134,6 +157,33 @@ def test_alternative_sequences_and_invalid_order():
     env.env = Domain([a, b[:1]])
     with pytest.raises(ValueError, match="equal lengths"):
         LiberoMemEpisodeProtocol(env)
+
+
+def test_episode_initialization_reloads_compiled_xml_and_copies_saved_state():
+    env = Env()
+    initial = np.array([10, 11, 12, 13], dtype=np.float64)
+    _, protocol = initialize_episode(env, initial, num_steps_wait=2)
+    assert env.events == [
+        "reset_env",
+        ("reload_xml", "<compiled_model/>"),
+        "reset_sim",
+        "restore_state",
+        "forward",
+        "install_raw_state",
+    ]
+    # sim.reset() mutated the original array; the saved state must be a copy.
+    np.testing.assert_array_equal(env.restored_state, np.arange(4))
+    np.testing.assert_array_equal(env.initial, initial)
+    assert env.calls == 2 and protocol.action_steps == env.env.tick_calls == 0
+    assert not protocol.snapshot()["success"] and not env.env._overshot
+
+
+@pytest.mark.parametrize("wait", [-1, True, 0.5])
+def test_episode_initialization_rejects_invalid_wait(wait):
+    env = Env()
+    with pytest.raises(ValueError, match="nonnegative integer"):
+        initialize_episode(env, np.zeros(4), num_steps_wait=wait)
+    assert env.events == []
 
 
 @pytest.fixture
@@ -235,6 +285,7 @@ def test_replay_never_stops_on_intermediate_done_and_closes(config, overshoot):
     result = replay.run_replay(replace(config, tail_steps=3), env_factory=factory)
     env, args = environments[0]
     assert result["status"] == "completed"
+    assert result["environment_reset"] == RESET_PROTOCOL
     episode = result["episodes"][0]
     assert episode["action_steps"] == 5 and episode["first_success_step"] == 2
     assert episode["success"] is (not overshoot)

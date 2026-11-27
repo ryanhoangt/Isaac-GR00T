@@ -23,7 +23,7 @@ from examples.Libero.eval.utils import (
     get_libero_image,
     save_rollout_video,
 )
-from examples.Libero_Mem.episode import LiberoMemEpisodeProtocol
+from examples.Libero_Mem.environment import RESET_PROTOCOL, initialize_episode
 from examples.Libero_Mem.source import AUDIT_VERSION, vector_fingerprint
 from examples.Libero_Mem.tasks import TASK_BY_NUMBER
 
@@ -260,6 +260,7 @@ def run_replay(config, *, env_factory=None):
     summary = {
         "status": "running",
         "protocol": plan["protocol"],
+        "environment_reset": RESET_PROTOCOL,
         "selection": config.selection,
         "config": {key: str(value) if isinstance(value, Path) else value for key, value in asdict(config).items()},
         "audit_sha256": plan["audit_sha256"],
@@ -288,15 +289,7 @@ def run_replay(config, *, env_factory=None):
                 seed=config.seed,
             )
             try:
-                protocol = LiberoMemEpisodeProtocol(env)
-                protocol.reset()
-                env.reset()
-                if len(env.sim.get_state().flatten()) != len(initial):
-                    raise ValueError("Raw initial-state dimension differs from simulator model")
-                obs = env.set_init_state(initial)
-                for _ in range(config.num_steps_wait):
-                    obs, _, _, _ = env.step(get_libero_dummy_action())
-                protocol.reset()
+                obs, protocol = initialize_episode(env, initial, num_steps_wait=config.num_steps_wait)
                 top, wrist = [], []
                 with (output / f"T{job['task_number']}_{job['demo']['demo_id']}.jsonl").open("x") as log:
                     for action in program[:budget]:
