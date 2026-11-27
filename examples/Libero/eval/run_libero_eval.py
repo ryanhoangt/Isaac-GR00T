@@ -10,14 +10,14 @@ import torch
 import tqdm
 import tyro
 
+from examples.Libero.adapter import to_gr00t_observation, to_libero_actions
 from examples.Libero.eval.utils import (
     get_libero_dummy_action,
     get_libero_env,
     get_libero_image,
-    normalize_gripper_action,
-    quat2axisangle,
     save_rollout_video,
 )
+
 
 def summarize_obs(obs_dict):
     summary = {}
@@ -101,29 +101,12 @@ class GR00TPolicy:
 
     def _process_observation(self, obs, lang: str):
         """Convert Libero observation to GR00T format."""
-        xyz = obs["robot0_eef_pos"]
-        rpy = quat2axisangle(obs["robot0_eef_quat"])
-        gripper = obs["robot0_gripper_qpos"]
-        img, wrist_img = get_libero_image(obs)
-        new_obs = {
-            "video.image": np.expand_dims(img, axis=0),
-            "video.wrist_image": np.expand_dims(wrist_img, axis=0),
-            "state.x": np.array([[xyz[0]]]),
-            "state.y": np.array([[xyz[1]]]),
-            "state.z": np.array([[xyz[2]]]),
-            "state.roll": np.array([[rpy[0]]]),
-            "state.pitch": np.array([[rpy[1]]]),
-            "state.yaw": np.array([[rpy[2]]]),
-            "state.gripper": np.expand_dims(gripper, axis=0),
-            "annotation.human.action.task_description": [lang],
-        }
+        new_obs = to_gr00t_observation(obs, lang)
         if not self.headless:
             show_obs_images_cv2(new_obs)
         return new_obs
 
-    def _convert_to_libero_action(
-        self, action_chunk: dict[str, np.array], idx: int = 0
-    ) -> np.ndarray:
+    def _convert_to_libero_action(self, action_chunk: dict[str, np.array], idx: int = 0) -> np.ndarray:
         """Convert GR00T action chunk to Libero format.
 
         Args:
@@ -133,20 +116,13 @@ class GR00TPolicy:
         Returns:
             7-dim numpy array: [dx, dy, dz, droll, dpitch, dyaw, gripper]
         """
-        action_components = [
-            np.atleast_1d(action_chunk[f"action.{key}"][idx])[0] for key in self.action_keys
-        ]
-        action_array = np.array(action_components, dtype=np.float32)
-        action_array = normalize_gripper_action(action_array, binarize=True)
-        assert len(action_array) == 7, f"Expected 7-dim action, got {len(action_array)}"
-        return action_array
+        return to_libero_actions(action_chunk)[idx]
 
 
 def eval_libero(cfg: GenerateConfig) -> None:
     from libero.libero import benchmark
 
-    limits = {"libero_spatial": 220, "libero_object": 280, "libero_goal": 600,
-              "libero_10": 1000, "libero_90": 400}
+    limits = {"libero_spatial": 220, "libero_object": 280, "libero_goal": 600, "libero_10": 1000, "libero_90": 400}
     if cfg.task_suite_name not in limits:
         raise ValueError(f"Unsupported suite: {cfg.task_suite_name}")
     if cfg.num_trials_per_task < 1 or cfg.num_steps_wait < 0 or cfg.request_timeout_ms < 1:
@@ -163,9 +139,16 @@ def eval_libero(cfg: GenerateConfig) -> None:
     # Stabilization steps count toward robosuite's internal termination horizon.
     # LIBERO replaces returned `done` with task success, hiding horizon termination.
     simulator_horizon = limits[cfg.task_suite_name] + cfg.num_steps_wait
-    summary = {"status": "running", "config": asdict(cfg), "tasks": [],
-               "max_action_steps": limits[cfg.task_suite_name], "simulator_horizon": simulator_horizon,
-               "total_episodes": 0, "total_successes": 0, "success_rate": 0.0}
+    summary = {
+        "status": "running",
+        "config": asdict(cfg),
+        "tasks": [],
+        "max_action_steps": limits[cfg.task_suite_name],
+        "simulator_horizon": simulator_horizon,
+        "total_episodes": 0,
+        "total_successes": 0,
+        "success_rate": 0.0,
+    }
 
     def save_summary():
         count = summary["total_episodes"]
@@ -184,13 +167,17 @@ def eval_libero(cfg: GenerateConfig) -> None:
                     raise ValueError(f"Task {task_id} has only {len(states)} initial states")
                 env, description = get_libero_env(task, resolution=256, horizon=simulator_horizon)
                 policy = None
-                result = {"task_id": task_id, "description": description, "episodes": [],
-                          "successes": 0, "success_rate": 0.0}
+                result = {
+                    "task_id": task_id,
+                    "description": description,
+                    "episodes": [],
+                    "successes": 0,
+                    "success_rate": 0.0,
+                }
                 summary["tasks"].append(result)
                 try:
                     env.seed(cfg.seed)
-                    policy = GR00TPolicy(port=cfg.port, headless=cfg.headless,
-                                         timeout_ms=cfg.request_timeout_ms)
+                    policy = GR00TPolicy(port=cfg.port, headless=cfg.headless, timeout_ms=cfg.request_timeout_ms)
                     for episode_idx in tqdm.tqdm(range(cfg.num_trials_per_task)):
                         env.reset()
                         obs = env.set_init_state(states[episode_idx])
@@ -211,20 +198,31 @@ def eval_libero(cfg: GenerateConfig) -> None:
                             if done:
                                 success = True
                                 break
-                        episode = {"initial_state_index": episode_idx, "success": success,
-                                   "action_steps": action_steps}
+                        episode = {
+                            "initial_state_index": episode_idx,
+                            "success": success,
+                            "action_steps": action_steps,
+                        }
                         if cfg.save_videos and top_view:
                             episode["video"] = save_rollout_video(
-                                top_view, wrist_view, summary["total_episodes"] + 1,
-                                success, description, log_file=log_file, output_dir=output / "videos")
+                                top_view,
+                                wrist_view,
+                                summary["total_episodes"] + 1,
+                                success,
+                                description,
+                                log_file=log_file,
+                                output_dir=output / "videos",
+                            )
                         result["episodes"].append(episode)
                         result["successes"] += int(success)
                         result["success_rate"] = result["successes"] / len(result["episodes"])
                         summary["total_episodes"] += 1
                         summary["total_successes"] += int(success)
                         save_summary()
-                        message = (f"Task {task_id}, trial {episode_idx}: success={success}; "
-                                   f"total {summary['total_successes']}/{summary['total_episodes']}")
+                        message = (
+                            f"Task {task_id}, trial {episode_idx}: success={success}; "
+                            f"total {summary['total_successes']}/{summary['total_episodes']}"
+                        )
                         print(message, flush=True)
                         log_file.write(message + "\n")
                         log_file.flush()
@@ -234,8 +232,11 @@ def eval_libero(cfg: GenerateConfig) -> None:
                     env.close()
         summary["status"] = "completed"
         save_summary()
-        print(f"Success rate: {summary['success_rate']:.2%} "
-              f"({summary['total_successes']}/{summary['total_episodes']})", flush=True)
+        print(
+            f"Success rate: {summary['success_rate']:.2%} "
+            f"({summary['total_successes']}/{summary['total_episodes']})",
+            flush=True,
+        )
     except BaseException as exc:
         summary["status"] = "failed"
         summary["error"] = f"{type(exc).__name__}: {exc}"

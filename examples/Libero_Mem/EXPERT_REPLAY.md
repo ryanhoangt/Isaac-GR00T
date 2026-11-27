@@ -162,6 +162,6 @@ They also verify that the shared LIBERO helpers retain their existing defaults
 while accepting fork options and a 20 FPS video override, and that setup reloads
 compiled XML and preserves a copy of the saved state across simulator reset.
 
-GR00T inference and HTTP policy rollout are the next unit; they should use
-`initialize_episode` and the same episode protocol. Actual model inference will
-require a GPU allocation.
+Unit 5's [GR00T HTTP policy rollout](EVALUATION.md) uses `initialize_episode`,
+the same episode protocol and shared source selection/runtime helpers.
+Actual model inference requires a GPU allocation.

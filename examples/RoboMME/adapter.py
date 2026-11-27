@@ -6,11 +6,11 @@ Gr00tPolicy and RoboMMEDataConfig, using the checkpoint's metadata.
 """
 
 from collections.abc import Mapping
-import math
 from typing import Any
-from urllib.parse import urlsplit
 
 import numpy as np
+
+from gr00t.eval.http_client import HTTPInferenceClient
 
 
 OBSERVATION_BUFFERS = (
@@ -108,28 +108,13 @@ def to_robomme_actions(prediction: Mapping[str, Any]) -> np.ndarray:
     return np.concatenate([joints, gripper], axis=1)
 
 
-class RoboMMEGr00tClient:
+class RoboMMEGr00tClient(HTTPInferenceClient):
     """Expose the benchmark infer/reset interface over GR00T's existing /act API.
 
     The model server owns checkpoint loading and normalization. This client
     keeps no episode memory or action queue, and does not retry inference calls.
     Use as a context manager or call close() when evaluation finishes.
     """
-
-    def __init__(self, server_url: str = "http://127.0.0.1:5555", *, timeout: float = 60.0):
-        parsed = urlsplit(server_url)
-        if parsed.scheme not in ("http", "https") or not parsed.netloc or parsed.query or parsed.fragment:
-            raise ValueError("server_url must be an HTTP(S) base URL without a query or fragment")
-        if not math.isfinite(timeout) or timeout <= 0:
-            raise ValueError("timeout must be positive and finite")
-
-        import json_numpy
-        import requests
-
-        self.server_url = server_url.rstrip("/")
-        self.timeout = timeout
-        self._json_numpy = json_numpy
-        self._session = requests.Session()
 
     def infer(self, inputs: Mapping[str, Any]) -> dict[str, np.ndarray]:
         """Send the current observation and return {"actions": float32 (H, 8)}.
@@ -139,16 +124,7 @@ class RoboMMEGr00tClient:
         because inference may already have advanced the server's sampling RNG.
         """
         observation = to_gr00t_observation(inputs)
-        response = self._session.post(
-            f"{self.server_url}/act",
-            data=self._json_numpy.dumps({"observation": observation}),
-            headers={"Content-Type": "application/json"},
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
-        prediction = self._json_numpy.loads(response.content)
-        if not isinstance(prediction, Mapping):
-            raise ValueError("GR00T /act response must be a mapping of physical action fields")
+        prediction = self.get_action(observation)
         return {"actions": to_robomme_actions(prediction)}
 
     def reset(self) -> dict[str, bool]:
@@ -158,12 +134,3 @@ class RoboMMEGr00tClient:
         server's sampling RNG is not reseeded. The rollout runner owns its queue.
         """
         return {"reset_finished": True}
-
-    def close(self) -> None:
-        self._session.close()
-
-    def __enter__(self) -> "RoboMMEGr00tClient":
-        return self
-
-    def __exit__(self, *exc: Any) -> None:
-        self.close()

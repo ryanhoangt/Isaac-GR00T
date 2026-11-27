@@ -6,8 +6,10 @@ downloaded Full/Raw sources. Unit 2 adds [audited HDF5-to-LeRobot conversion](CO
 using the existing LIBERO data configuration. Unit 3 adds
 [standalone copied training folds](FOLDS.md) with their own normalization.
 Unit 4 adds [sequence-aware episode accounting and audited expert replay](EXPERT_REPLAY.md)
-on the existing LIBERO environment/image/video helpers. GR00T policy rollout
-and training integration follow. No simulator, model weights or GPU are needed
+on the existing LIBERO environment/image/video helpers. Unit 5 adds
+[GR00T HTTP policy rollouts](EVALUATION.md), shared LIBERO mapping, action chunking,
+fold/task selection and grouped metrics. Training integration follows.
+No simulator, model weights or GPU are needed
 for source audit, conversion or fold extraction; expert replay runs on CPU with OSMesa.
 
 Sources:

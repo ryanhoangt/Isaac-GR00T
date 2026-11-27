@@ -7,147 +7,46 @@ is required with OSMesa; simulation imports are delayed until after dry-run.
 import argparse
 from dataclasses import asdict, dataclass
 import hashlib
-import importlib
 import json
-import os
 from pathlib import Path
-import sys
-from types import SimpleNamespace
 
 import h5py
 import numpy as np
 
 from examples.Libero.eval.utils import (
     get_libero_dummy_action,
-    get_libero_env,
     get_libero_image,
     save_rollout_video,
 )
-from examples.Libero_Mem.environment import RESET_PROTOCOL, initialize_episode
-from examples.Libero_Mem.source import AUDIT_VERSION, vector_fingerprint
+from examples.Libero_Mem.environment import RESET_PROTOCOL, configure_runtime, initialize_episode, make_environment
+from examples.Libero_Mem.selection import (
+    REPO,
+    SourceConfig,
+    episode_plan,
+    file_hash as _file_hash,
+    source_identity as _source_identity,
+    write_summary as _write_summary,
+)
+from examples.Libero_Mem.source import vector_fingerprint
 from examples.Libero_Mem.tasks import TASK_BY_NUMBER
 
 
-REPO = Path(__file__).resolve().parents[2]
-
-
 @dataclass(frozen=True)
-class ReplayConfig:
-    raw_root: Path
-    audit: Path
-    output_dir: Path
-    libero_repo: Path = REPO.parent / "libero-mem"
-    task_ids: tuple[int, ...] = tuple(range(1, 11))
-    demo_ids: tuple[int, ...] | None = None
-    selection: str = "unseen"
-    num_episodes: int = 1
-    num_steps_wait: int = 20
+class ReplayConfig(SourceConfig):
     tail_steps: int = 20
-    seed: int = 0
     max_steps: int | None = None
-    renderer: str = "osmesa"
     render: bool = False
     save_videos: bool = False
-    dry_run: bool = False
-
-
-def _file_hash(path):
-    digest = hashlib.sha256()
-    with Path(path).open("rb") as handle:
-        for block in iter(lambda: handle.read(4 * 1024 * 1024), b""):
-            digest.update(block)
-    return digest.hexdigest()
-
-
-def _source_identity(path, expected):
-    stat = path.stat()
-    if stat.st_size != expected["size_bytes"] or stat.st_mtime_ns != expected["mtime_ns"]:
-        raise ValueError(f"Raw source differs from audit: {path}")
 
 
 def replay_plan(config):
-    if config.selection not in ("seen", "unseen") or config.renderer not in ("osmesa", "egl"):
-        raise ValueError("Unsupported initial-state selection or renderer")
-    for name in ("num_episodes", "num_steps_wait", "tail_steps", "seed"):
-        value = getattr(config, name)
-        if type(value) is not int or value < (1 if name == "num_episodes" else 0):
-            raise ValueError(f"Invalid {name}")
+    if type(config.tail_steps) is not int or config.tail_steps < 0:
+        raise ValueError("Invalid tail_steps")
     if config.max_steps is not None and (type(config.max_steps) is not int or config.max_steps < 1):
         raise ValueError("max_steps must be positive")
-    if (
-        not config.task_ids
-        or len(set(config.task_ids)) != len(config.task_ids)
-        or any(type(i) is not int or i not in TASK_BY_NUMBER for i in config.task_ids)
-    ):
-        raise ValueError("task_ids must be distinct integers in 1..10")
-    if config.demo_ids is not None and (
-        not config.demo_ids
-        or len(set(config.demo_ids)) != len(config.demo_ids)
-        or any(type(i) is not int or i < 0 for i in config.demo_ids)
-    ):
-        raise ValueError("demo_ids must be distinct nonnegative integers")
-    report = json.loads(Path(config.audit).read_text())
-    if report.get("audit_version") != AUDIT_VERSION or report.get("status") != "complete":
-        raise ValueError("Expected a completed unit-1 source audit")
-    records = {entry["number"]: entry for entry in report["tasks"]}
-    if len(records) != len(report["tasks"]) or set(config.task_ids) - records.keys():
-        raise ValueError("Audit does not uniquely cover the selected tasks")
-    raw_root = Path(config.raw_root).expanduser().resolve(strict=True)
-    libero_repo = Path(config.libero_repo).expanduser().resolve(strict=True)
-    jobs = []
-    for number in sorted(config.task_ids):
-        task, record = TASK_BY_NUMBER[number], records[number]
-        if record["name"] != task.name or record["instruction"] != task.instruction:
-            raise ValueError("Audited task identity differs from registry")
-        raw = sorted(record["raw_demos"], key=lambda item: int(item["demo_id"].removeprefix("demo_")))
-        if not raw or len({entry["demo_id"] for entry in raw}) != len(raw):
-            raise ValueError(f"Empty or duplicate Raw demo inventory: {task.name}")
-        full_states = {entry["initial_state_sha256"] for entry in record["full_demos"]}
-        if config.selection == "unseen":
-            if len(raw) < 20:
-                raise ValueError("Unseen initial-state protocol requires the final twenty Raw demos")
-            pool = raw[-20:]
-            if any(entry["initial_state_sha256"] in full_states for entry in pool):
-                raise ValueError(f"Unseen Raw tail overlaps Full initial states: {task.name}")
-        else:
-            pool = [entry for entry in raw if entry["initial_state_sha256"] in full_states]
-        if config.demo_ids is None:
-            if config.num_episodes > len(pool):
-                raise ValueError(f"Not enough {config.selection} initial states: {task.name}")
-            # Match the author's last-N convention for unseen, first-N for seen.
-            selected = (
-                pool[-config.num_episodes :] if config.selection == "unseen" else pool[: config.num_episodes]
-            )
-        else:
-            names = {f"demo_{i}" for i in config.demo_ids}
-            if names - {entry["demo_id"] for entry in pool}:
-                raise ValueError(
-                    f"Requested demo is outside the {config.selection} initial-state pool: {task.name}"
-                )
-            selected = [entry for entry in pool if entry["demo_id"] in names]
-        path = raw_root / task.filename
-        _source_identity(path, record["raw_file"])
-        bddl = libero_repo / "libero/libero/bddl_files/libero_mem" / f"{task.name}.bddl"
-        bddl_hash = _file_hash(bddl)
-        for entry in selected:
-            jobs.append(
-                {
-                    "task_number": number,
-                    "task": task.name,
-                    "instruction": task.instruction,
-                    "raw_file": str(path),
-                    "raw_identity": record["raw_file"],
-                    "demo": entry,
-                    "bddl_file": str(bddl),
-                    "bddl_sha256": bddl_hash,
-                }
-            )
-    return {
-        "protocol": "raw_expert_replay",
-        "selection": config.selection,
-        "audit_sha256": _file_hash(config.audit),
-        "jobs": jobs,
-    }
+    plan = episode_plan(config)
+    plan["protocol"] = "raw_expert_replay"
+    return plan
 
 
 def load_expert(job, tail_steps):
@@ -176,69 +75,6 @@ def load_expert(job, tail_steps):
     program[program[:, -1] == 0, -1] = -1
     tail = np.tile(np.asarray(get_libero_dummy_action(), np.float64), (tail_steps, 1))
     return initial, np.concatenate([program, tail]), start
-
-
-def configure_runtime(config, output):
-    """Use the fork and its customized robosuite in this process only."""
-    repo = Path(config.libero_repo).expanduser().resolve(strict=True)
-    for name, relative in (
-        ("libero", "libero"),
-        ("robosuite", "thirdparty/robosuite"),
-        ("robomimic", "thirdparty/robomimic"),
-    ):
-        loaded = sys.modules.get(name)
-        if loaded is not None and (
-            not getattr(loaded, "__file__", None)
-            or not Path(loaded.__file__).resolve().is_relative_to(repo / relative)
-        ):
-            raise ValueError(f"{name} already imported from another checkout; start a fresh replay process")
-    sys.path[:0] = [str(repo), str(repo / "thirdparty/robosuite"), str(repo / "thirdparty/robomimic")]
-    os.environ["MUJOCO_GL"] = config.renderer
-    os.environ["PYOPENGL_PLATFORM"] = config.renderer
-    os.environ.setdefault("LP_NUM_THREADS", "2")
-    os.environ.setdefault("NUMBA_NUM_THREADS", "1")
-    directory = output / ".libero"
-    directory.mkdir()
-    base = repo / "libero/libero"
-    paths = {
-        "benchmark_root": str(base),
-        "assets": str(base / "assets"),
-        "bddl_files": str(base / "bddl_files"),
-        "init_states": str(repo / "scripts/__init_data"),
-        "datasets": str(Path(config.raw_root).resolve()),
-    }
-    (directory / "config.yaml").write_text(json.dumps(paths, indent=2) + "\n")
-    os.environ["LIBERO_CONFIG_PATH"] = str(directory)
-    modules = {name: importlib.import_module(name) for name in ("mujoco", "robosuite", "libero.libero.envs")}
-    expected = {"robosuite": repo / "thirdparty/robosuite", "libero.libero.envs": repo}
-    for name, root in expected.items():
-        if not Path(modules[name].__file__).resolve().is_relative_to(root):
-            raise ValueError(f"Imported {name} from unexpected source")
-    return {
-        name: {"version": getattr(module, "__version__", None), "path": module.__file__}
-        for name, module in modules.items()
-    }
-
-
-def make_environment(task, *, horizon, render, seed):
-    descriptor = SimpleNamespace(
-        language=task.instruction, problem_folder="libero_mem", bddl_file=f"{task.name}.bddl"
-    )
-    env, _ = get_libero_env(
-        descriptor, horizon=horizon, use_camera_obs=render, camera_depths=False, camera_segmentations=None
-    )
-    env.seed(seed)
-    actual = env.language_instruction.strip()
-    if actual != task.instruction:
-        env.close()
-        raise ValueError("Simulator BDDL instruction differs from registry")
-    return env
-
-
-def _write_summary(path, summary):
-    temporary = path.with_suffix(".json.tmp")
-    temporary.write_text(json.dumps(summary, indent=2, allow_nan=False) + "\n")
-    temporary.replace(path)
 
 
 def run_replay(config, *, env_factory=None):
