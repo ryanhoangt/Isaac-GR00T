@@ -5,8 +5,10 @@ Unit 1 defines task identity and the proposal's two task folds, and audits the
 downloaded Full/Raw sources. Unit 2 adds [audited HDF5-to-LeRobot conversion](CONVERSION.md)
 using the existing LIBERO data configuration. Unit 3 adds
 [standalone copied training folds](FOLDS.md) with their own normalization.
-Training and rollout integration follow. No simulator, model weights or GPU
-are needed for source audit, conversion or fold extraction.
+Unit 4 adds [sequence-aware episode accounting and audited expert replay](EXPERT_REPLAY.md)
+on the existing LIBERO environment/image/video helpers. GR00T policy rollout
+and training integration follow. No simulator, model weights or GPU are needed
+for source audit, conversion or fold extraction; expert replay runs on CPU with OSMesa.
 
 Sources:
 
@@ -91,9 +93,11 @@ a different demo ID sharing a Full initial state is excluded too. Counts that
 differ from the nominal 100 Full / 120 Raw are warnings, not silently repaired.
 
 Raw-only entries include both unrefined training candidates and the intended
-evaluation tail. They are **not an automatic evaluation split**. Choosing support
-and test episodes, confirming the original tail's identities, and checking
-cross-task/support/test separation belong to subsequent protocol integration.
+evaluation tail. They are **not an automatic evaluation split**. Unit 4 checks
+that each task's final twenty Raw initial states are absent from that task's Full
+demonstrations before selecting unseen episodes. This initial-state selection is
+separate from the proposal's task folds; support/test episode separation for
+retrieval remains part of subsequent integration.
 Full and Raw actions are not required to match: refinement trims/appends actions
 and replays trajectories. This audit checks metadata identity and numeric
 integrity, not replay equivalence, image orientation or physical task success.

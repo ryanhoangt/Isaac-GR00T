@@ -11,25 +11,22 @@ DATE = time.strftime("%Y_%m_%d")
 DATE_TIME = time.strftime("%Y_%m_%d-%H_%M_%S")
 
 
-def get_libero_env(task, resolution=256, horizon=1000):
+def get_libero_env(task, resolution=256, horizon=1000, **env_kwargs):
     """Initializes and returns the LIBERO environment, along with the task description."""
     from libero.libero import get_libero_path
     from libero.libero.envs import OffScreenRenderEnv
 
     task_description = task.language
-    task_bddl_file = os.path.join(
-        get_libero_path("bddl_files"), task.problem_folder, task.bddl_file
-    )
+    task_bddl_file = os.path.join(get_libero_path("bddl_files"), task.problem_folder, task.bddl_file)
     env_args = {
         "bddl_file_name": task_bddl_file,
         "camera_heights": resolution,
         "camera_widths": resolution,
         "horizon": horizon,
     }
+    env_args.update(env_kwargs)
     env = OffScreenRenderEnv(**env_args)
-    env.seed(
-        0
-    )  # IMPORTANT: seed seems to affect object positions even when using fixed initial state
+    env.seed(0)  # IMPORTANT: seed seems to affect object positions even when using fixed initial state
     return env, task_description
 
 
@@ -48,15 +45,19 @@ def get_libero_image(obs):
     return img, wrist_img
 
 
-def save_rollout_video(top_view, wrist_view, idx, success, task_description, log_file=None, output_dir=None):
+def save_rollout_video(
+    top_view, wrist_view, idx, success, task_description, log_file=None, output_dir=None, fps=30
+):
     """Saves an MP4 replay of an episode."""
     rollout_dir = os.fspath(output_dir) if output_dir is not None else f"./rollouts/{DATE}"
     os.makedirs(rollout_dir, exist_ok=True)
     processed_task_description = (
         task_description.lower().replace(" ", "_").replace("\n", "_").replace(".", "_")[:50]
     )
-    mp4_path = f"{rollout_dir}/{DATE_TIME}--episode={idx}--success={success}--task={processed_task_description}.mp4"
-    video_writer = imageio.get_writer(mp4_path, fps=30)
+    mp4_path = (
+        f"{rollout_dir}/{DATE_TIME}--episode={idx}--success={success}--task={processed_task_description}.mp4"
+    )
+    video_writer = imageio.get_writer(mp4_path, fps=fps)
     for img1, img2 in zip(top_view, wrist_view):
         combined = np.hstack((img1, img2))
         video_writer.append_data(combined)
