@@ -1,9 +1,11 @@
-# LIBERO-Mem integration — source audit (unit 1)
+# LIBERO-Mem integration
 
 This directory extends the existing [`examples/Libero`](../Libero) support.
 Unit 1 defines task identity and the proposal's two task folds, and audits the
-downloaded Full/Raw sources. Conversion, training and rollout integration are
-subsequent units. No simulator, model weights or GPU are needed here.
+downloaded Full/Raw sources. Unit 2 adds [audited HDF5-to-LeRobot conversion](CONVERSION.md)
+using the existing LIBERO data configuration. Fold extraction, training and
+rollout integration are subsequent units. No simulator, model weights or GPU
+are needed for source audit or conversion.
 
 Sources:
 
