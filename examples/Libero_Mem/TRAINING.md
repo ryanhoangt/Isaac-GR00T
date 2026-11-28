@@ -16,17 +16,27 @@ The default `--mode cotrain` implements the proposal's auxiliary LIBERO training
 | Primary | The selected copied LIBERO-Mem training fold | Exactly 50% |
 | Auxiliary | Cleaned Spatial, Object, Goal and Long datasets | Exactly 50% combined |
 
-Within the auxiliary half, the four suites have equal sampling probability.
-Within each dataset, trajectory sampling is weighted by length, as in the
-existing LIBERO pipeline. Batch size must be even. The mixture weights are
+The primary LIBERO-Mem fold is shuffled and traversed **without replacement**:
+every frame anchor occurs exactly once in each complete epoch, as in standalone
+BC training. Within the auxiliary half, the four suites have equal sampling
+probability; auxiliary trajectories/frames are sampled with replacement and
+trajectory selection is weighted by length. Batch size must be even. The mixture weights are
 `1, 0.25, 0.25, 0.25, 0.25`, with dataset-length reweighting disabled; they
 produce dataset probabilities `0.5, 0.125, 0.125, 0.125, 0.125`.
 
-`LeRobotMixtureDataset` now has an optional `balanced_primary_batches` mode
-using PyTorch's batched dataset fetch to enforce that split for every microbatch,
-including even partial batches. Its default remains off. The fine-tuner accepts
-optional `--dataset-weights` and `--balanced-primary-batches`; existing LIBERO
-and RoboMME launches keep their prior defaults.
+The launcher defaults to `--primary-sampling epoch`. The paired sampler shuffles
+primary frame indices and adds one auxiliary draw per primary frame. The final
+batch remains partial when needed; Accelerate padding is disabled so it cannot
+repeat primary frames to fill a batch. Thus both groups still contribute exactly
+half of that final batch. This mode currently supports one training process and
+requires `drop_last=False`. Epoch information travels with sampler indices so
+persistent workers also sample auxiliary data using the current epoch.
+
+`--primary-sampling replacement` reproduces the original co-training sampler,
+where primary frames are also sampled with replacement. The generic fine-tuner
+retains that legacy default; only the LIBERO-Mem launcher's default changes.
+Its optional flags are `--dataset-weights`, `--balanced-primary-batches` and
+`--primary-sampling`. Existing LIBERO and RoboMME launches keep their prior defaults.
 
 Fold A contains T1/3/5/7/9; fold B contains T2/4/6/8/10. The launcher validates
 fold manifests, instruction vocabularies, episode mappings and all parquet/video
@@ -51,7 +61,11 @@ Data remains float32; the unchanged trainer uses BF16 compute/autocast and TF32.
 
 Both folds use the same seed, base checkpoint, optimizer budget and effective
 batch size. Their frame counts differ, so an equal step budget is not an equal
-epoch budget. The 10,000-step default is configurable, not a budget fixed by the
+epoch budget. At batch 32, accumulation 1, one LIBERO-Mem epoch takes about
+9,247 optimizer updates for fold A and 10,842 for fold B (including the partial
+last batch). Thus 10,000 updates cover about 1.08 / 0.92 primary epochs; a run
+stopped before an epoch ends has not yet visited all its primary frames.
+The 10,000-step default is configurable, not a budget fixed by the
 proposal; keep the chosen budget consistent across the compared methods.
 
 From the Isaac-GR00T root, inspect the full plan first:
@@ -79,7 +93,7 @@ srun --jobid=67873 --overlap --ntasks=1 --cpus-per-task=4 --mem=30G \
     /home/vhoangth2/miniconda3/envs/gr00t/bin/python -u \
     scripts/train_libero_mem.py \
     --output-root outputs/libero_mem_baseline_s42 \
-    --folds A B --mode cotrain --seed 42 \
+    --folds A B --mode cotrain --primary-sampling epoch --seed 42 \
     --max-steps 10000 --save-steps 1000 --save-total-limit 2 \
     --batch-size 32 --gradient-accumulation-steps 1 \
     --dataloader-num-workers 2 --report-to tensorboard
@@ -145,6 +159,22 @@ recipe's **batch 32 and two workers**, saving a complete checkpoint. Its report
 is `outputs/libero_mem_training_recipe_smoke_unit6/summary.json`. This checks
 the batch/worker configuration used in the full command above without launching
 the full 10,000-step run.
+
+After the primary-sampling revision, another two-update GPU check used batch 32,
+two workers and `--primary-sampling epoch` in allocation `67919`. It saved a
+complete checkpoint under `outputs/libero_mem_primary_epoch_smoke/`. Earlier
+unit-6 checkpoint/reload reports above used the original replacement sampler.
+`tests/test_primary_epoch_sampling.py` verifies exact frame coverage, partial
+batches, epoch shuffling, persistent-worker epoch updates and deterministic
+sampler resume/skip behavior, including the actual Trainer/Accelerate loader.
+
+A five-update VRAM profile for each fold on allocation `67919`, with batch 32,
+accumulation 1, two workers, BF16/TF32 and the frozen LLM/vision recipe, measured
+**27.70 GiB peak PyTorch allocated**, **29.36 GiB peak reserved**, and
+**30.10 GiB sampled total GPU usage**. PyTorch peaks use its allocator counters;
+total usage is polled with `nvidia-smi`. These are short-run observations, not
+the maximum over a full 10,000-update run. Reports are under
+`outputs/libero_mem_vram_profile/summary.json`.
 
 All **108 focused/regression tests passed**, covering exact microbatch composition with real DataLoaders (0/2
 workers), deterministic sampling, legacy unbalanced behavior, fold separation,

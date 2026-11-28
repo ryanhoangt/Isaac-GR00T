@@ -29,6 +29,7 @@ class TrainingConfig:
     base_model: Path = DEFAULT_BASE
     folds: tuple[str, ...] = ("A", "B")
     mode: str = "cotrain"
+    primary_sampling: str = "epoch"
     seed: int = 42
     max_steps: int = 10000
     save_steps: int = 1000
@@ -121,6 +122,8 @@ def training_plan(config):
         raise ValueError("folds must be distinct A/B values")
     if config.mode not in ("cotrain", "mem-only") or config.report_to not in ("tensorboard", "wandb"):
         raise ValueError("Unsupported training mode or reporting backend")
+    if config.primary_sampling not in ("replacement", "epoch"):
+        raise ValueError("primary_sampling must be replacement or epoch")
     if type(config.seed) is not int or not 0 <= config.seed < 2**32:
         raise ValueError("seed must be in [0, 2**32)")
     for name in (
@@ -218,6 +221,8 @@ def training_plan(config):
                 *map(str, weights),
                 "--no-balance-dataset-weights",
                 "--balanced-primary-batches",
+                "--primary-sampling",
+                config.primary_sampling,
             ]
         plans.append(
             {
@@ -227,6 +232,13 @@ def training_plan(config):
                 "dataset_weights": weights,
                 "dataset_probabilities": [weight / sum(weights) for weight in weights],
                 "balanced_primary_batches": bool(auxiliary),
+                "primary_sampling": config.primary_sampling if auxiliary else "epoch",
+                "epoch_semantics": (
+                    "primary_frame_pass"
+                    if not auxiliary or config.primary_sampling == "epoch"
+                    else "mixture_draws"
+                ),
+                "primary_frames_per_epoch": datasets[0]["frames"],
                 "command": command,
                 "normalization_scope": "training_fold_and_auxiliary_mixture"
                 if auxiliary
@@ -351,6 +363,7 @@ def main(argv=None):
     parser.add_argument("--base-model", type=Path, default=DEFAULT_BASE)
     parser.add_argument("--folds", nargs="+", choices=("A", "B"), default=["A", "B"])
     parser.add_argument("--mode", choices=("cotrain", "mem-only"), default="cotrain")
+    parser.add_argument("--primary-sampling", choices=("epoch", "replacement"), default="epoch")
     for name in (
         "seed",
         "max_steps",

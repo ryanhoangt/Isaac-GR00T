@@ -168,6 +168,9 @@ class ArgsConfig:
     balanced_primary_batches: bool = False
     """Exactly half each microbatch from weight-1 datasets, half from auxiliary datasets."""
 
+    primary_sampling: Literal["replacement", "epoch"] = "replacement"
+    """With balanced batches, optionally traverse one primary dataset once per epoch."""
+
     def __post_init__(self):
         if not 0 <= self.seed < 2**32:
             raise ValueError("seed must be an integer between 0 and 4294967295")
@@ -181,6 +184,8 @@ class ArgsConfig:
             raise ValueError("dataset_weights must match dataset_path, be positive/finite, and include weight 1")
         if self.balanced_primary_batches and (len(self.dataset_path) < 2 or self.batch_size % 2):
             raise ValueError("Balanced primary batches need multiple datasets and an even batch_size")
+        if self.primary_sampling == "epoch" and not self.balanced_primary_batches:
+            raise ValueError("Epoch primary sampling requires balanced_primary_batches")
 
 
 #####################################################################################
@@ -316,6 +321,7 @@ def main(config: ArgsConfig):
                 "percentile_mixing_method": "weighted_average",
             },
             balanced_primary_batches=config.balanced_primary_batches,
+            primary_sampling=config.primary_sampling,
         )
         print(f"Loaded {len(single_datasets)} datasets, with {config.dataset_path} ")
 

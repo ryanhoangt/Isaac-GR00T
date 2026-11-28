@@ -989,6 +989,7 @@ class LeRobotMixtureDataset(Dataset):
             "percentile_mixing_method": "min_max",
         },
         balanced_primary_batches: bool = False,
+        primary_sampling: str = "replacement",
     ):
         """
         Initialize the mixture dataset.
@@ -1011,6 +1012,7 @@ class LeRobotMixtureDataset(Dataset):
         self.seed = seed
         self.mode = mode
         self.balanced_primary_batches = balanced_primary_batches
+        self.primary_sampling = primary_sampling
 
         # Set properties for sampling
 
@@ -1042,6 +1044,12 @@ class LeRobotMixtureDataset(Dataset):
             self._dataset_sampling_weights[self._primary_dataset_indices].sum(), 0.5
         ):
             raise ValueError("Balanced primary batches require primary datasets to have probability 0.5")
+        if primary_sampling not in ("replacement", "epoch"):
+            raise ValueError("primary_sampling must be replacement or epoch")
+        if primary_sampling == "epoch" and (
+            not balanced_primary_batches or mode != "train" or self._primary_dataset_indices.sum() != 1
+        ):
+            raise ValueError("Epoch primary sampling requires one primary dataset and balanced training batches")
 
         # Set the epoch and sample the first epoch
         self.set_epoch(0)
@@ -1087,12 +1095,15 @@ class LeRobotMixtureDataset(Dataset):
         self.epoch = epoch
         # self.sampled_steps = self.sample_epoch()
 
-    def sample_step(self, index: int, primary: bool | None = None) -> tuple[LeRobotSingleDataset, int, int]:
+    def sample_step(
+        self, index: int, primary: bool | None = None, epoch: int | None = None
+    ) -> tuple[LeRobotSingleDataset, int, int]:
         """Sample a single step from the dataset."""
         # return self.sampled_steps[index]
 
         # Set seed
-        seed = index if self.mode != "train" else safe_hash((self.epoch, index, self.seed))
+        sample_epoch = self.epoch if epoch is None else epoch
+        seed = index if self.mode != "train" else safe_hash((sample_epoch, index, self.seed))
         rng = np.random.default_rng(seed)
 
         # Sample dataset
@@ -1122,6 +1133,20 @@ class LeRobotMixtureDataset(Dataset):
         Returns:
             dict: The data for the trajectory and start index.
         """
+        if self.primary_sampling == "epoch":
+            # Encode the epoch in sampler indices so persistent workers receive it.
+            epoch, position = index if isinstance(index, tuple) else (self.epoch, index)
+            if not 0 <= position < len(self):
+                raise IndexError(position)
+            if position % 2 == 0:
+                dataset = self.datasets[int(np.flatnonzero(self.primary_dataset_indices)[0])]
+                if hasattr(dataset, "set_epoch"):
+                    dataset.set_epoch(epoch)
+                return dataset[position // 2]
+            dataset, trajectory_name, step = self.sample_step(position, primary=False, epoch=epoch)
+            if hasattr(dataset, "set_epoch"):
+                dataset.set_epoch(epoch)
+            return dataset.transforms(dataset.get_step_data(trajectory_name, step))
         dataset, trajectory_name, step = self.sample_step(index)
         return dataset.transforms(dataset.get_step_data(trajectory_name, step))
 
@@ -1131,6 +1156,8 @@ class LeRobotMixtureDataset(Dataset):
         Returns:
             int: The length of a single epoch in the mixture.
         """
+        if self.primary_sampling == "epoch":
+            return 2 * int(self.dataset_lengths[self.primary_dataset_indices][0])
         return int(
             (self.dataset_lengths / self.dataset_sampling_weights)[
                 self.primary_dataset_indices
@@ -1139,6 +1166,13 @@ class LeRobotMixtureDataset(Dataset):
 
     def __getitems__(self, indices: list[int]) -> list[dict]:
         """Optional exact 50/50 primary/auxiliary microbatches via PyTorch's batched fetch."""
+        if self.primary_sampling == "epoch":
+            positions = [index[1] if isinstance(index, tuple) else index for index in indices]
+            if len(positions) % 2 or any(
+                positions[i] % 2 or positions[i + 1] != positions[i] + 1 for i in range(0, len(positions), 2)
+            ):
+                raise ValueError("Epoch primary sampling requires paired indices from BaseSampler")
+            return [self[index] for index in indices]
         if not self.balanced_primary_batches:
             return [self[index] for index in indices]
         if len(indices) % 2:

@@ -45,12 +45,19 @@ class BaseSampler(Sampler):
         self.epoch = 0
 
     def __iter__(self):
+        primary_epoch = getattr(self.data_source, "primary_sampling", "replacement") == "epoch"
+        count = len(self.data_source) // 2 if primary_epoch else len(self.data_source)
         if self.shuffle:
             g = torch.Generator()
             g.manual_seed(self.seed + self.epoch)
             # must not add rank here, or randomization will be different for each rank
-            return iter(torch.randperm(len(self.data_source), generator=g).tolist())
-        return iter(range(len(self.data_source)))
+            indices = torch.randperm(count, generator=g).tolist()
+        else:
+            indices = range(count)
+        if primary_epoch:
+            epoch = self.epoch
+            return ((epoch, 2 * index + side) for index in indices for side in (0, 1))
+        return iter(indices)
 
     def set_epoch(self, epoch):
         self.epoch = epoch
@@ -81,6 +88,11 @@ class DualBrainTrainer(transformers.Trainer):
         return BaseSampler(eval_dataset, shuffle=False)
 
     def get_train_dataloader(self):
+        if getattr(self.train_dataset, "primary_sampling", "replacement") == "epoch":
+            if self.args.world_size != 1 or self.args.dataloader_drop_last:
+                raise ValueError("Epoch primary sampling requires one process and drop_last=False")
+            # Accelerate otherwise pads the last batch by replaying its first indices.
+            self.accelerator.even_batches = False
         if self.dataloader_multiprocessing_context is None or self.args.dataloader_num_workers == 0:
             return super().get_train_dataloader()
         if self.train_dataset is None:
